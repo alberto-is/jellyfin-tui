@@ -1844,4 +1844,220 @@ impl App {
             progress_bar_area[1],
         );
     }
+
+    pub fn render_zen(&mut self, frame: &mut Frame) {
+        let area = frame.area();
+        let current_song = self.state.queue.get(self.state.current_playback_state.current_index);
+
+        let has_cover = self.cover_art.is_some();
+
+        let vertical = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints(vec![
+                Constraint::Percentage(20),
+                Constraint::Percentage(40),
+                Constraint::Percentage(20),
+                Constraint::Percentage(10),
+                Constraint::Percentage(10),
+            ])
+            .split(area);
+
+        let cover_area = vertical[1];
+
+        if has_cover {
+            let image_block = Block::default()
+                .borders(Borders::ALL)
+                .border_type(self.border_type)
+                .border_style(self.theme.resolve(&self.theme.border));
+
+            let inner = image_block.inner(cover_area);
+            frame.render_widget(&image_block, cover_area);
+
+            if let Some(cover_art) = self.cover_art.as_mut() {
+                let img_size = cover_art.size_for(Resize::Scale(None), inner);
+                let centered = Rect {
+                    x: inner.x + (inner.width.saturating_sub(img_size.width)) / 2,
+                    y: inner.y + (inner.height.saturating_sub(img_size.height)) / 2,
+                    width: img_size.width,
+                    height: img_size.height,
+                };
+                let image = StatefulImage::default().resize(Resize::Scale(None));
+                frame.render_stateful_widget(image, centered, cover_art);
+            }
+        }
+
+        let song_info_area = vertical[2];
+
+        let lines: Vec<Line> = match current_song {
+            Some(song) => {
+                let title = Line::from(vec![
+                    Span::styled(
+                        &song.name,
+                        Style::default()
+                            .fg(self.theme.resolve(&self.theme.foreground))
+                            .add_modifier(Modifier::BOLD),
+                    ),
+                ])
+                .centered();
+
+                let artists = Line::from(vec![Span::styled(
+                    song.artists.join(", "),
+                    Style::default().fg(self.theme.resolve(&self.theme.foreground_secondary)),
+                )])
+                .centered();
+
+                let album = if song.production_year > 0 {
+                    Line::from(vec![
+                        Span::styled(
+                            &song.album,
+                            Style::default().fg(self.theme.resolve(&self.theme.foreground_dim)),
+                        ),
+                        Span::styled(
+                            format!(" ({})", song.production_year),
+                            Style::default().fg(self.theme.resolve(&self.theme.foreground_dim)),
+                        ),
+                    ])
+                    .centered()
+                } else {
+                    Line::from(vec![Span::styled(
+                        &song.album,
+                        Style::default().fg(self.theme.resolve(&self.theme.foreground_dim)),
+                    )])
+                    .centered()
+                };
+
+                vec![title, artists, album]
+            }
+            None => vec![Line::from("No track playing")
+                .fg(self.theme.resolve(&self.theme.foreground))
+                .centered()],
+        };
+
+        frame.render_widget(Paragraph::new(lines).style(Style::default().fg(self.theme.resolve(&self.theme.foreground))), song_info_area);
+
+        let progress_area = vertical[3];
+
+        let total_seconds = current_song
+            .map(|s| s.run_time_ticks as f64 / 10_000_000.0)
+            .unwrap_or(self.state.current_playback_state.duration);
+
+        let visible_position = if self.state.current_playback_state.seek_active {
+            match self.hard_seek_target {
+                Some(position) => position,
+                _ => self.state.current_playback_state.position,
+            }
+        } else {
+            self.state.current_playback_state.position
+        };
+
+        let percentage =
+            if total_seconds > 0.0 { (visible_position / total_seconds) * 100.0 } else { 0.0 };
+
+        let duration = match total_seconds {
+            0.0 => "0:00 / 0:00".to_string(),
+            _ => {
+                let current_time = self.state.current_playback_state.position;
+                format!(
+                    "{}:{:02} / {}:{:02}",
+                    current_time as u32 / 60,
+                    current_time as u32 % 60,
+                    total_seconds as u32 / 60,
+                    total_seconds as u32 % 60
+                )
+            }
+        };
+
+        let progress_layout = Layout::default()
+            .direction(Direction::Horizontal)
+            .flex(Flex::Center)
+            .constraints(vec![Constraint::Fill(100), Constraint::Min(duration.len() as u16 + 5)])
+            .split(progress_area);
+
+        frame.render_widget(
+            LineGauge::default()
+                .filled_style(if self.buffering {
+                    Style::default().fg(self.theme.primary_color).add_modifier(Modifier::BOLD)
+                } else {
+                    Style::default()
+                        .fg(self.theme.resolve(&self.theme.progress_fill))
+                        .add_modifier(Modifier::BOLD)
+                })
+                .unfilled_style(
+                    Style::default()
+                        .fg(self.theme.resolve(&self.theme.progress_track))
+                        .add_modifier(Modifier::BOLD),
+                )
+                .ratio(percentage.clamp(0.0, 100.0) / 100.0)
+                .label(Line::from(format!(
+                    "{}   {:.0}% ",
+                    if self.buffering {
+                        self.spinner_stages[self.spinner]
+                    } else if self.paused ^ self.swap_play_pause {
+                        "⏸︎"
+                    } else {
+                        "►"
+                    },
+                    percentage,
+                ))),
+            progress_layout[0],
+        );
+
+        frame.render_widget(
+            Paragraph::new(duration)
+                .centered()
+                .style(Style::default().fg(self.theme.resolve(&self.theme.foreground))),
+            progress_layout[1],
+        );
+
+        let hint_area = vertical[4];
+        let hint = Line::from(vec![
+            Span::styled(
+                "Esc",
+                Style::default()
+                    .fg(self.theme.primary_color)
+                    .add_modifier(Modifier::BOLD),
+            ),
+            Span::styled(
+                " exit zen  •   ",
+                Style::default().fg(self.theme.resolve(&self.theme.foreground_dim)),
+            ),
+            Span::styled(
+                "Space",
+                Style::default()
+                    .fg(self.theme.primary_color)
+                    .add_modifier(Modifier::BOLD),
+            ),
+            Span::styled(
+                " play/pause  •   ",
+                Style::default().fg(self.theme.resolve(&self.theme.foreground_dim)),
+            ),
+            Span::styled(
+                "N",
+                Style::default()
+                    .fg(self.theme.primary_color)
+                    .add_modifier(Modifier::BOLD),
+            ),
+            Span::styled(
+                " next  •   Shift+N",
+                Style::default().fg(self.theme.resolve(&self.theme.foreground_dim)),
+            ),
+            Span::styled(
+                " prev  •   ",
+                Style::default().fg(self.theme.resolve(&self.theme.foreground_dim)),
+            ),
+            Span::styled(
+                "← →",
+                Style::default()
+                    .fg(self.theme.primary_color)
+                    .add_modifier(Modifier::BOLD),
+            ),
+            Span::styled(
+                " seek",
+                Style::default().fg(self.theme.resolve(&self.theme.foreground_dim)),
+            ),
+        ])
+        .centered();
+
+        frame.render_widget(Paragraph::new(hint), hint_area);
+    }
 }

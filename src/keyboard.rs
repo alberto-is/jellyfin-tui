@@ -139,6 +139,8 @@ pub enum Action {
     HeightenPane,
     /// Make current pane shorter
     ShortenPane,
+    /// Toggle zen mode (fullscreen player view)
+    ZenMode,
 
     /// Exit the app
     Quit,
@@ -220,6 +222,7 @@ impl Action {
             Action::ShrinkPane => Cow::Borrowed("Shrink pane width (normal mode)"),
             Action::HeightenPane => Cow::Borrowed("Increase pane height (vertical mode)"),
             Action::ShortenPane => Cow::Borrowed("Shrink pane height (vertical mode)"),
+            Action::ZenMode => Cow::Borrowed("Toggle zen mode"),
             Action::Help => Cow::Borrowed("Open help"),
             // System
             Action::Quit => Cow::Borrowed("Quit application"),
@@ -281,7 +284,8 @@ impl Action {
             | Action::WidenPane
             | Action::ShrinkPane
             | Action::HeightenPane
-            | Action::ShortenPane => ActionCategory::UI,
+            | Action::ShortenPane
+            | Action::ZenMode => ActionCategory::UI,
 
             Action::Quit | Action::Shell(_) | Action::Reset => ActionCategory::System,
         }
@@ -383,6 +387,8 @@ const DEFAULT_BINDINGS: &[(KeyCombination, Action)] = &[
     // popups
     (key!(shift - p), Action::GlobalPopup),
     (key!('p'), Action::Popup),
+    // zen mode
+    (key!('z'), Action::ZenMode),
 ];
 
 pub fn try_load_keymap(
@@ -560,6 +566,26 @@ impl App {
             return;
         }
 
+        if self.zen_mode {
+            match action {
+                Action::Cancel | Action::ZenMode => self.zen_mode = false,
+                Action::Quit => self.exit().await,
+                Action::PlayPause => match self.paused {
+                    true => self.play().await,
+                    false => self.pause().await,
+                },
+                Action::Next => self.next().await,
+                Action::Previous => self.previous().await,
+                Action::Seek(secs) => self.execute_seek(*secs).await,
+                Action::VolumeUp => self.volume_up().await,
+                Action::VolumeDown => self.volume_down().await,
+                Action::Up => {}
+                Action::Down => {}
+                _ => {}
+            }
+            return;
+        }
+
         if self.state.active_tab == ActiveTab::Search {
             self.process_search_tab_action(&action).await;
             return;
@@ -644,6 +670,7 @@ impl App {
             Action::Popup => self.request_popup(false).await,
             Action::GlobalPopup => self.request_popup(true).await,
             Action::CycleRadio => self.cycle_radio().await,
+            Action::ZenMode => self.zen_mode = true,
             // noops
             Action::DeleteBack => {}
             Action::Type(_) => {}
