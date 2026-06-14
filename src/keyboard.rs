@@ -472,7 +472,6 @@ impl App {
             if let KeyCode::Char(c) = key_event.code {
                 self.dirty = true;
                 self.help_search.push(c);
-                // self.help_first_match = None;
                 return;
             }
         }
@@ -522,20 +521,14 @@ impl App {
                     Action::JumpFirst => self.state.help_scroll_state.first(),
                     Action::JumpLast => self.state.help_scroll_state.last(),
                     Action::Cancel => {
-                        if let Some(pos) = self.help_first_match {
-                            self.state.help_scroll_state =
-                                self.state.help_scroll_state.position(pos);
-                        }
                         self.help_search.clear();
                         self.help_searching = false;
                     }
                     Action::Delete => {
                         self.help_search.clear();
-                        self.help_first_match = None;
                     }
                     Action::DeleteBack => {
                         self.help_search.pop();
-                        self.help_first_match = None;
                     }
                     _ => {}
                 }
