@@ -89,7 +89,7 @@ impl App {
 
         // split results area into 3 parts — horizontal when wide, stacked vertically
         // when narrow, matching the Library/Playlists vertical layout threshold.
-        let is_vertical = results_area.width < crate::library::VERTICAL_LAYOUT_THRESHOLD;
+        let is_vertical = self.layout_mode.is_vertical(results_area.width, self.vertical_threshold);
         let results_layout = Layout::default()
             .direction(if is_vertical { Direction::Vertical } else { Direction::Horizontal })
             .constraints(vec![

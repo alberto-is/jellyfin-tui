@@ -3237,7 +3237,7 @@ impl crate::tui::App {
 
             let width = if let PopupMenu::GlobalRunScheduledTask { .. } = menu { 70 } else { 30 };
 
-            let popup_area = if area.width < crate::library::VERTICAL_LAYOUT_THRESHOLD {
+            let popup_area = if self.layout_mode.is_vertical(area.width, self.vertical_threshold) {
                 // In vertical mode the terminal is narrow enough that 30% of
                 // its width would truncate menu labels — just use the full
                 // width.

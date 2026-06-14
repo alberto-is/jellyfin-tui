@@ -26,14 +26,9 @@ use ratatui::{
 };
 use ratatui_image::{Resize, StatefulImage};
 
-/// When the Library tab's render area is narrower than this many columns,
-/// the layout switches from the three-column horizontal arrangement to a
-/// stacked vertical arrangement. See render_home_vertical.
-pub const VERTICAL_LAYOUT_THRESHOLD: u16 = 100;
-
 impl App {
     pub fn render_home(&mut self, app_container: Rect, frame: &mut Frame) {
-        if app_container.width < VERTICAL_LAYOUT_THRESHOLD {
+        if self.layout_mode.is_vertical(app_container.width, self.vertical_threshold) {
             self.render_home_vertical(app_container, frame);
             return;
         }
@@ -98,8 +93,7 @@ impl App {
         self.create_popup(frame);
     }
 
-    /// Stacked layout used when the Library tab is narrower than
-    /// [`VERTICAL_LAYOUT_THRESHOLD`]. The (List, Tracks, Queue) vertical
+    /// Stacked layout used when the vertical layout mode is active. The (List, Tracks, Queue) vertical
     /// pane ratios drive the heights of the three main sections. Lyrics, when
     /// visible, take a fixed 5-row slice (3 visible lyric lines + borders),
     /// between Tracks and Queue. Player and download strips are pinned at the

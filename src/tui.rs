@@ -232,6 +232,8 @@ pub struct App {
 
     pub lyrics: Option<(String, Vec<Lyric>, bool)>, // ID, lyrics, time_synced
     pub lyrics_visibility: LyricsVisibility,
+    pub layout_mode: crate::config::LayoutMode,
+    pub vertical_threshold: u16,
     pub previous_song_parent_id: String,
     pub active_song_id: String,
 
@@ -523,6 +525,15 @@ impl App {
                 .and_then(|v| v.as_str())
                 .map(LyricsVisibility::from_config)
                 .unwrap_or(LyricsVisibility::Always),
+            layout_mode: config
+                .get("layout")
+                .and_then(|v| v.as_str())
+                .map(crate::config::LayoutMode::from_config)
+                .unwrap_or(crate::config::LayoutMode::Auto),
+            vertical_threshold: config
+                .get("vertical_threshold")
+                .and_then(|v| v.as_u64())
+                .unwrap_or(100) as u16,
             previous_song_parent_id: String::from(""),
             active_song_id: String::from(""),
 
@@ -1225,6 +1236,15 @@ impl App {
                     .and_then(|v| v.as_str())
                     .map(LyricsVisibility::from_config)
                     .unwrap_or(LyricsVisibility::Always);
+                self.layout_mode = new_config
+                    .get("layout")
+                    .and_then(|v| v.as_str())
+                    .map(crate::config::LayoutMode::from_config)
+                    .unwrap_or(crate::config::LayoutMode::Auto);
+                self.vertical_threshold = new_config
+                    .get("vertical_threshold")
+                    .and_then(|v| v.as_u64())
+                    .unwrap_or(100) as u16;
                 self.symbols = new_config
                     .get("symbols")
                     .and_then(|v| serde_yaml::from_value(v.clone()).ok())
@@ -1935,7 +1955,7 @@ impl App {
             ])
             .split(area);
 
-        let is_vertical = area.width < crate::library::VERTICAL_LAYOUT_THRESHOLD;
+        let is_vertical = self.layout_mode.is_vertical(area.width, self.vertical_threshold);
         let labels: Vec<String> = if is_vertical {
             ["Lib", "Alb", "Plst", "Srch"].iter().map(|s| s.to_string()).collect()
         } else {

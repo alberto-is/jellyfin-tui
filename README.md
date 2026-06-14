@@ -18,7 +18,7 @@ its goal is to offer a self-hosted, terminal music player with all the modern fe
 - playlists (play/create/edit/reorder)
 - transcoding, shuffle, repeat modes, the works
 - remote control from the Jellyfin web UI or any other Jellyfin client
-- vertical layout for narrow terminals (under 100 columns), resize panes with `Ctrl+Up/Down`
+- vertical layout for narrow terminals, resize panes with `Ctrl+Up/Down`
 - works over ssh (and tmux)
 - sleep timer
 - fast and just kind of nifty really
@@ -138,6 +138,9 @@ auto_color: true
 auto_color_fade_ms: 400
 # Always show the lyrics pane, even if no lyrics are available
 lyrics: 'always' # options: 'always', 'never', 'auto'
+# Layout mode — 'auto' switches to vertical below vertical_threshold columns
+layout: auto # options: 'auto', 'vertical', 'horizontal'
+vertical_threshold: 100 # columns; only used when layout is 'auto'
 # Swap the play and pause icons
 swap_play_pause: false
 
