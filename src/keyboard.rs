@@ -577,25 +577,29 @@ impl App {
             Action::NextPane => self.step_section(true),
             Action::PreviousPane => self.step_section(false),
             Action::WidenPane => {
-                let is_vertical = self.layout_mode.is_vertical(self.last_term_size.0, self.vertical_threshold);
+                let is_vertical =
+                    self.layout_mode.is_vertical(self.last_term_size.0, self.vertical_threshold);
                 if !is_vertical {
                     self.preferences.widen_current_pane(&self.state.active_section, true, false)
                 }
             }
             Action::ShrinkPane => {
-                let is_vertical = self.layout_mode.is_vertical(self.last_term_size.0, self.vertical_threshold);
+                let is_vertical =
+                    self.layout_mode.is_vertical(self.last_term_size.0, self.vertical_threshold);
                 if !is_vertical {
                     self.preferences.widen_current_pane(&self.state.active_section, false, false)
                 }
             }
             Action::HeightenPane => {
-                let is_vertical = self.layout_mode.is_vertical(self.last_term_size.0, self.vertical_threshold);
+                let is_vertical =
+                    self.layout_mode.is_vertical(self.last_term_size.0, self.vertical_threshold);
                 if is_vertical {
                     self.preferences.widen_current_pane(&self.state.active_section, true, true)
                 }
             }
             Action::ShortenPane => {
-                let is_vertical = self.layout_mode.is_vertical(self.last_term_size.0, self.vertical_threshold);
+                let is_vertical =
+                    self.layout_mode.is_vertical(self.last_term_size.0, self.vertical_threshold);
                 if is_vertical {
                     self.preferences.widen_current_pane(&self.state.active_section, false, true)
                 }

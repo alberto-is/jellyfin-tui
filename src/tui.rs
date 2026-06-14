@@ -1241,10 +1241,9 @@ impl App {
                     .and_then(|v| v.as_str())
                     .map(crate::config::LayoutMode::from_config)
                     .unwrap_or(crate::config::LayoutMode::Auto);
-                self.vertical_threshold = new_config
-                    .get("vertical_threshold")
-                    .and_then(|v| v.as_u64())
-                    .unwrap_or(100) as u16;
+                self.vertical_threshold =
+                    new_config.get("vertical_threshold").and_then(|v| v.as_u64()).unwrap_or(100)
+                        as u16;
                 self.symbols = new_config
                     .get("symbols")
                     .and_then(|v| serde_yaml::from_value(v.clone()).ok())

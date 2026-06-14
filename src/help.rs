@@ -19,8 +19,12 @@ struct ActionEntry {
     search_name: String,
 }
 impl Searchable for ActionEntry {
-    fn id(&self) -> &str { &self.search_name }
-    fn name(&self) -> &str { &self.search_name }
+    fn id(&self) -> &str {
+        &self.search_name
+    }
+    fn name(&self) -> &str {
+        &self.search_name
+    }
 }
 
 pub fn render_help_modal(
@@ -140,7 +144,12 @@ pub fn render_help_modal(
             .into_values()
             .flat_map(|a| a.into_iter())
             .map(|(action, keys)| ActionEntry {
-                search_name: format!("{} {} {}", action.to_config_string(), action.description(), key_combo_string(&keys)),
+                search_name: format!(
+                    "{} {} {}",
+                    action.to_config_string(),
+                    action.description(),
+                    key_combo_string(&keys)
+                ),
                 action,
                 keys,
             })
@@ -177,7 +186,6 @@ pub fn render_help_modal(
     crate::helpers::render_scrollbar(frame, table_area, scroll_state, theme);
 }
 
-
 fn build_grouped(
     keymap: &IndexMap<KeyCombination, Action>,
 ) -> IndexMap<ActionCategory, IndexMap<Action, Vec<KeyCombination>>> {
@@ -205,7 +213,12 @@ fn key_combo_string(keys: &[KeyCombination]) -> String {
     }
 }
 
-fn make_row<'a>(action: &Action, keys: &[KeyCombination], search_norm: &str, theme: &Theme) -> Row<'a> {
+fn make_row<'a>(
+    action: &Action,
+    keys: &[KeyCombination],
+    search_norm: &str,
+    theme: &Theme,
+) -> Row<'a> {
     let key_str = key_combo_string(keys);
     let key_style = if keys.is_empty() {
         Style::default().fg(theme.resolve(&theme.foreground_dim)).bold()
