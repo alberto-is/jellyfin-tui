@@ -147,7 +147,6 @@ vertical_threshold: 100 # columns; only used when layout is 'auto'
 
 # Swap the play and pause icons
 swap_play_pause: false
-
 # Custom symbols — useful for Nerd Font users. Each character of `spinner` is one animation frame.
 symbols:
   favorite: "♥"

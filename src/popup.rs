@@ -318,7 +318,7 @@ impl PopupMenu {
     }
 
     // Return the list of options displayed by this menu
-    pub fn options(&self) -> Vec<PopupAction> {
+    pub fn options(&self, favorite: &str) -> Vec<PopupAction> {
         match self {
             PopupMenu::GenericMessage { message, .. } => vec![
                 PopupAction::new(message.to_string(), PopupCommand::Ok, Style::default(), false),
@@ -819,7 +819,7 @@ impl PopupMenu {
                     actions.push(PopupAction::new(
                         format!(
                             "{}{} ({})",
-                            if playlist.user_data.is_favorite { "♥ " } else { "" },
+                            if playlist.user_data.is_favorite { format!("{} ", favorite) } else { String::new() },
                             playlist.name,
                             playlist.child_count
                         ),
@@ -939,7 +939,7 @@ impl PopupMenu {
                     actions.push(PopupAction::new(
                         format!(
                             "{}{} ({})",
-                            if playlist.user_data.is_favorite { "♥ " } else { "" },
+                            if playlist.user_data.is_favorite { format!("{} ", favorite) } else { String::new() },
                             playlist.name,
                             playlist.child_count
                         ),
@@ -1354,7 +1354,7 @@ impl crate::tui::App {
             Action::Cancel => {
                 if !self.popup_search_term.is_empty() {
                     let selected_id = self.get_id_of_selected(
-                        &self.popup.current_menu.as_ref().map_or(vec![], |m| m.options()),
+                        &self.popup.current_menu.as_ref().map_or(vec![], |m| m.options(&self.symbols.favorite)),
                         Selectable::Popup,
                     );
                     self.popup_search_term.clear();
@@ -1380,7 +1380,7 @@ impl crate::tui::App {
             }
             Action::DeleteBack => {
                 let selected_id = self.get_id_of_selected(
-                    &self.popup.current_menu.as_ref().map_or(vec![], |m| m.options()),
+                    &self.popup.current_menu.as_ref().map_or(vec![], |m| m.options(&self.symbols.favorite)),
                     Selectable::Popup,
                 );
                 self.popup_search_term.pop();
@@ -1388,7 +1388,7 @@ impl crate::tui::App {
             }
             Action::Delete => {
                 let selected_id = self.get_id_of_selected(
-                    &self.popup.current_menu.as_ref().map_or(vec![], |m| m.options()),
+                    &self.popup.current_menu.as_ref().map_or(vec![], |m| m.options(&self.symbols.favorite)),
                     Selectable::Popup,
                 );
                 self.popup_search_term.clear();
@@ -1396,7 +1396,7 @@ impl crate::tui::App {
             }
             Action::Cancel => {
                 let selected_id = self.get_id_of_selected(
-                    &self.popup.current_menu.as_ref().map_or(vec![], |m| m.options()),
+                    &self.popup.current_menu.as_ref().map_or(vec![], |m| m.options(&self.symbols.favorite)),
                     Selectable::Popup,
                 );
                 self.popup_search_term.clear();
@@ -1424,9 +1424,9 @@ impl crate::tui::App {
         };
 
         let options = if self.client.is_some() {
-            menu.options()
+            menu.options(&self.symbols.favorite)
         } else {
-            menu.options().into_iter().filter(|o| !o.online).collect::<Vec<PopupAction>>()
+            menu.options(&self.symbols.favorite).into_iter().filter(|o| !o.online).collect::<Vec<PopupAction>>()
         };
 
         if options.is_empty() {
@@ -3143,9 +3143,9 @@ impl crate::tui::App {
         if let Some(menu) = &mut self.popup.current_menu {
             let area = frame.area();
             let options = if self.client.is_some() {
-                menu.options()
+                menu.options(&self.symbols.favorite)
             } else {
-                menu.options().into_iter().filter(|o| !o.online).collect::<Vec<PopupAction>>()
+                menu.options(&self.symbols.favorite).into_iter().filter(|o| !o.online).collect::<Vec<PopupAction>>()
             };
 
             if options.is_empty() {

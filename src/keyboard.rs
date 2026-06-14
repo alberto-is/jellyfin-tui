@@ -1130,7 +1130,7 @@ impl App {
             }
             Selectable::Popup => {
                 if let Some(menu) = &self.popup.current_menu {
-                    menu.options().iter().map(|o| String::from(o.id())).collect::<Vec<String>>()
+                    menu.options(&self.symbols.favorite).iter().map(|o| String::from(o.id())).collect::<Vec<String>>()
                 } else {
                     vec![]
                 }
@@ -1163,7 +1163,7 @@ impl App {
                     search_ranked_indices(&self.playlist_tracks, search_term, false)
                 }
                 Selectable::Popup => self.popup.current_menu.as_ref().map_or(vec![], |menu| {
-                    search_ranked_indices(&menu.options(), search_term, false)
+                    search_ranked_indices(&menu.options(&self.symbols.favorite), search_term, false)
                 }),
             };
 
@@ -1178,7 +1178,7 @@ impl App {
                     .popup
                     .current_menu
                     .as_ref()
-                    .map_or(false, |menu| menu.options()[i].id() == id),
+                    .map_or(false, |menu| menu.options(&self.symbols.favorite)[i].id() == id),
             }) {
                 match selectable {
                     Selectable::Artist => self.artist_select_by_index(index),
