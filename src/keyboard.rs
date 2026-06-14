@@ -1130,7 +1130,10 @@ impl App {
             }
             Selectable::Popup => {
                 if let Some(menu) = &self.popup.current_menu {
-                    menu.options(&self.symbols.favorite).iter().map(|o| String::from(o.id())).collect::<Vec<String>>()
+                    menu.options(&self.symbols.favorite)
+                        .iter()
+                        .map(|o| String::from(o.id()))
+                        .collect::<Vec<String>>()
                 } else {
                     vec![]
                 }
