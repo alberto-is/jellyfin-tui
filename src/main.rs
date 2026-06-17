@@ -5,6 +5,7 @@ mod database;
 mod discord;
 mod help;
 mod helpers;
+mod inhibit;
 mod keyboard;
 mod library;
 mod mpris;

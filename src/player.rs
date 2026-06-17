@@ -112,6 +112,7 @@ impl App {
         }
         self.mpv_handle.play().await;
         self.paused = false;
+        self.sleep_inhibitor.acquire();
 
         let _ = self.handle_discord(true).await.log_dbg("discord update");
         let _ = self.report_progress_if_needed().await.log_dbg("report progress");
@@ -125,6 +126,7 @@ impl App {
         }
         self.mpv_handle.pause().await;
         self.paused = true;
+        self.sleep_inhibitor.release();
 
         let _ = self.handle_discord(true).await.log_dbg("discord update");
         let _ = self.report_progress_if_needed().await.log_dbg("report progress");
@@ -135,6 +137,7 @@ impl App {
     pub async fn stop(&mut self) {
         self.stopped = true;
         self.paused = true;
+        self.sleep_inhibitor.release();
         self.mpv_handle.stop().await;
         self.state.queue.clear();
         self.lyrics = None;
