@@ -214,9 +214,9 @@ pub(crate) trait Backend: Send + 'static {
 }
 
 #[cfg(all(unix, not(target_os = "macos")))]
-mod linux;
-#[cfg(all(unix, not(target_os = "macos")))]
 mod inhibit;
+#[cfg(all(unix, not(target_os = "macos")))]
+mod linux;
 #[cfg(target_os = "macos")]
 mod macos;
 #[cfg(not(any(unix, target_os = "macos")))]

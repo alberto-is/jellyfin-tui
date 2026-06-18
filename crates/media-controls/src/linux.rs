@@ -467,7 +467,11 @@ impl Backend for LinuxBackend {
 
         if let Some(status) = status_changed_to {
             if let Ok(mut inh) = self.inhibit.lock() {
-                if status == PlaybackStatus::Playing { inh.acquire() } else { inh.release() }
+                if status == PlaybackStatus::Playing {
+                    inh.acquire()
+                } else {
+                    inh.release()
+                }
             }
         }
 
