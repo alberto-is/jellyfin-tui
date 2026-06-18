@@ -1,4 +1,4 @@
-use std::process::{Child, Command, ChildStdin, Stdio};
+use std::process::{Child, ChildStdin, Command, Stdio};
 
 pub(crate) struct SleepInhibitor {
     child: Option<Child>,
@@ -8,8 +8,8 @@ pub(crate) struct SleepInhibitor {
 
 impl SleepInhibitor {
     pub fn new() -> Self {
-        let available = Command::new("which")
-            .arg("systemd-inhibit")
+        let available = Command::new("systemd-inhibit")
+            .arg("--version")
             .stdout(Stdio::null())
             .stderr(Stdio::null())
             .status()
@@ -20,11 +20,7 @@ impl SleepInhibitor {
             log::info!("systemd-inhibit not found, sleep inhibition disabled");
         }
 
-        Self {
-            child: None,
-            stdin: None,
-            available,
-        }
+        Self { child: None, stdin: None, available }
     }
 
     pub fn acquire(&mut self) {
@@ -40,13 +36,11 @@ impl SleepInhibitor {
             "--mode=block",
             "cat",
         ]);
-        cmd.stdin(Stdio::piped())
-            .stdout(Stdio::null())
-            .stderr(Stdio::null());
+        cmd.stdin(Stdio::piped()).stdout(Stdio::null()).stderr(Stdio::null());
 
         match cmd.spawn() {
             Ok(mut child) => {
-                log::info!("Acquired sleep inhibitor (pid {})", child.id());
+                log::debug!("Acquired sleep inhibitor (pid {})", child.id());
                 self.stdin = child.stdin.take();
                 self.child = Some(child);
             }
@@ -59,7 +53,7 @@ impl SleepInhibitor {
         if let Some(mut child) = self.child.take() {
             let _ = child.kill();
             let _ = child.wait();
-            log::info!("Released sleep inhibitor");
+            log::debug!("Released sleep inhibitor");
         }
     }
 }
