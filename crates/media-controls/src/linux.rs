@@ -311,6 +311,7 @@ pub struct LinuxBackend {
     update_tx: mpsc::UnboundedSender<Vec<Property>>,
     seek_tx: mpsc::UnboundedSender<Time>,
     event_rx: Option<mpsc::Receiver<MediaControlEvent>>,
+    inhibit: std::sync::Mutex<crate::inhibit::SleepInhibitor>,
 }
 
 impl LinuxBackend {
@@ -350,7 +351,13 @@ impl LinuxBackend {
         let (seek_tx, seek_rx) = mpsc::unbounded_channel::<Time>();
         tokio::spawn(UpdateTask { server, update_rx, seek_rx }.run());
 
-        Some(LinuxBackend { state, update_tx, seek_tx, event_rx: Some(event_rx) })
+        Some(LinuxBackend {
+            state,
+            update_tx,
+            seek_tx,
+            event_rx: Some(event_rx),
+            inhibit: std::sync::Mutex::new(crate::inhibit::SleepInhibitor::new()),
+        })
     }
 }
 
@@ -405,9 +412,11 @@ impl Backend for LinuxBackend {
             props.push(Property::Metadata(build_metadata(&state)));
         }
 
+        let mut status_changed_to: Option<PlaybackStatus> = None;
         if let Some(s) = new.status {
             if state.now_playing.status != Some(s) {
                 state.now_playing.status = Some(s);
+                status_changed_to = Some(s);
                 props.push(Property::PlaybackStatus(to_mpris_status(Some(s))));
             }
         }
@@ -455,6 +464,17 @@ impl Backend for LinuxBackend {
         }
 
         drop(state);
+
+        if let Some(status) = status_changed_to {
+            if let Ok(mut inh) = self.inhibit.lock() {
+                if status == PlaybackStatus::Playing {
+                    inh.acquire()
+                } else {
+                    inh.release()
+                }
+            }
+        }
+
         log::debug!("PROPS: {props:?}, SEEK: {seek_pos:?}");
         if !props.is_empty() {
             let _ = self.update_tx.send(props);
