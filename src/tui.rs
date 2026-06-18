@@ -321,7 +321,6 @@ pub struct App {
 
     pub sleep_timer: Option<SleepTimer>,
     pub sleep_timer_original_volume: Option<i64>,
-    pub sleep_inhibitor: crate::inhibit::SleepInhibitor,
 }
 
 impl App {
@@ -624,7 +623,6 @@ impl App {
 
             sleep_timer: None,
             sleep_timer_original_volume: None,
-            sleep_inhibitor: crate::inhibit::SleepInhibitor::new(),
         }
     }
 }
