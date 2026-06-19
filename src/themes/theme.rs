@@ -267,6 +267,16 @@ impl Theme {
         self.last_primary = self.primary_color;
         self.target_primary = color;
         self.lerp_elapsed_ms = 0;
+        Self::write_accent_color_file(color);
+    }
+
+    pub(crate) fn write_accent_color_file(color: Color) {
+        if let Color::Rgb(r, g, b) = color {
+            if let Some(config_dir) = dirs::config_dir() {
+                let path = config_dir.join("jellyfin-tui").join("accent_color");
+                let _ = std::fs::write(&path, format!("#{:02x}{:02x}{:02x}", r, g, b));
+            }
+        }
     }
 
     pub fn tick_lerp(&mut self, dt_ms: u64, lerp_duration_ms: u64) -> bool {

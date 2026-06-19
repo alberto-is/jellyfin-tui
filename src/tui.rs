@@ -1762,7 +1762,9 @@ impl App {
                             }
                             self.grab_primary_color(&p);
                         } else {
-                            self.theme.primary_color = self.theme.resolve(&self.theme.accent);
+                            let fallback = self.theme.resolve(&self.theme.accent);
+                            self.theme.primary_color = fallback;
+                            Theme::write_accent_color_file(fallback);
                         }
                     }
                 }
