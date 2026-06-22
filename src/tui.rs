@@ -1762,14 +1762,23 @@ impl App {
                             }
                             self.grab_primary_color(&p);
                         } else {
-                            self.theme.primary_color = self.theme.resolve(&self.theme.accent);
+                            let fallback = self.theme.resolve(&self.theme.accent);
+                            self.theme.set_primary_color(fallback);
+                            Self::write_accent_color_file(fallback);
                         }
+                    } else {
+                        let fallback = self.theme.resolve(&self.theme.accent);
+                        self.theme.set_primary_color(fallback);
+                        Self::write_accent_color_file(fallback);
                     }
                 }
                 Err(_) => {
                     if second_attempt {
                         self.cover_art = None;
                         self.cover_art_path.clear();
+                        let fallback = self.theme.resolve(&self.theme.accent);
+                        self.theme.set_primary_color(fallback);
+                        Self::write_accent_color_file(fallback);
                     }
                 }
             }
@@ -2343,6 +2352,33 @@ impl App {
         (rgba.to_vec(), color_thief::ColorFormat::Rgba)
     }
 
+    fn write_accent_color_file(color: Color) {
+        let Color::Rgb(r, g, b) = color else {
+            return;
+        };
+
+        let Some(data_dir) = data_dir() else {
+            log::debug!("Could not write accent color file: data dir not available");
+            return;
+        };
+
+        let path = data_dir.join("jellyfin-tui").join("accent_color");
+        if let Some(parent) = path.parent() {
+            if let Err(err) = std::fs::create_dir_all(parent) {
+                log::debug!(
+                    "Could not write accent color file (create dir {}): {}",
+                    parent.display(),
+                    err
+                );
+                return;
+            }
+        }
+
+        if let Err(err) = std::fs::write(&path, format!("#{:02x}{:02x}{:02x}", r, g, b)) {
+            log::debug!("Could not write accent color file ({}): {}", path.display(), err);
+        }
+    }
+
     fn grab_primary_color(&mut self, p: &str) {
         if !self.auto_color {
             return;
@@ -2450,7 +2486,9 @@ impl App {
                 b = b.saturating_add(30);
             }
 
-            self.theme.set_primary_color(Color::Rgb(r, g, b));
+            let color = Color::Rgb(r, g, b);
+            self.theme.set_primary_color(color);
+            Self::write_accent_color_file(color);
         }
     }
 
