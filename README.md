@@ -507,8 +507,8 @@ When radio is active, press **`Shift+R`** to cycle radio modes.
 Jellyfin-tui registers itself as a Jellyfin session and can be controlled from the Jellyfin web UI or any other client
 that supports remote control (play/pause, stop, next/prev, seek, volume, play-queue).
 
-![remote](https://private-user-images.githubusercontent.com/22010510/602389137-5bcb7c1f-7233-418e-a72f-f6693a3668ac.gif?jwt=eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJnaXRodWIuY29tIiwiYXVkIjoicmF3LmdpdGh1YnVzZXJjb250ZW50LmNvbSIsImtleSI6ImtleTUiLCJleHAiOjE3ODE0NDQxOTUsIm5iZiI6MTc4MTQ0Mzg5NSwicGF0aCI6Ii8yMjAxMDUxMC82MDIzODkxMzctNWJjYjdjMWYtNzIzMy00MThlLWE3MmYtZjY2OTNhMzY2OGFjLmdpZj9YLUFtei1BbGdvcml0aG09QVdTNC1ITUFDLVNIQTI1NiZYLUFtei1DcmVkZW50aWFsPUFLSUFWQ09EWUxTQTUzUFFLNFpBJTJGMjAyNjA2MTQlMkZ1cy1lYXN0LTElMkZzMyUyRmF3czRfcmVxdWVzdCZYLUFtei1EYXRlPTIwMjYwNjE0VDEzMzEzNVomWC1BbXotRXhwaXJlcz0zMDAmWC1BbXotU2lnbmF0dXJlPTMxNjhiMDk0NmIzNmZhNmEzMzk3YmY2ZjQ5ZmNmNGZiMTc4NTNmMDhjN2M0YTE2ZGYzODAxNzQ0NjZmOWYxZjgmWC1BbXotU2lnbmVkSGVhZGVycz1ob3N0JnJlc3BvbnNlLWNvbnRlbnQtdHlwZT1pbWFnZSUyRmdpZiJ9.iA_AS5C4KEFsjcDALcH_k2jeJTP4qgc-V_GE_XZ_YWk)
-
+![remote-controls](.github/remote_controls.gif)
+  
 ## MPRIS
 
 Jellyfin-tui integrates with the OS media controls — MPRIS on Linux (controllable via `playerctl` etc.) and
