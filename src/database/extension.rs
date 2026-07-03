@@ -181,6 +181,8 @@ impl tui::App {
                 self.reorder_lists();
             }
             Status::AlbumsUpdated => {
+                // first run after mod joins on album/artist/abums, so it can return nothing. Recompute artists here as well
+                self.original_artists = get_all_artists(&self.db.pool).await.unwrap_or_default();
                 self.original_albums = get_all_albums(&self.db.pool).await.unwrap_or_default();
                 self.reorder_lists();
             }

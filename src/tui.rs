@@ -2489,6 +2489,10 @@ impl App {
             let color = Color::Rgb(r, g, b);
             self.theme.set_primary_color(color);
             Self::write_accent_color_file(color);
+        } else {
+            let fallback = self.theme.resolve(&self.theme.accent);
+            self.theme.set_primary_color(fallback);
+            Self::write_accent_color_file(fallback);
         }
     }
 

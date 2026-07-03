@@ -211,7 +211,7 @@ you want.
 Custom themes are hot-reloaded when you save the config file.
 
 #### `accent_color` file
-The `accent` color gets written to a file each time it changes. It is located in the DATA_DIR. (for example `~/.local/share/jellyfin-tui/accent_color` on linux) and contains the #HEX rgb color.Use it with pywal or similar tools.
+The `accent` color gets written to a file each time it changes. It is located in the DATA_DIR. (for example `~/.local/share/jellyfin-tui/accent_color` on linux) and contains the #HEX rgb color. Use it with pywal or similar tools.
 
 ### Color formats
 
