@@ -210,6 +210,9 @@ You can also define your own **custom themes** in the config by selecting a **ba
 you want.
 Custom themes are hot-reloaded when you save the config file.
 
+#### accent_color file
+The accent color gets written to a file each time it changes. It is located in the DATA_DIR. (for example ~/.local/share/jellyfin-tui/accent_color) and contains the #HEX rgb color.
+
 ### Color formats
 
 * `"#rrggbb"` (hex)
@@ -521,9 +524,7 @@ strips diacritics (so `boa` finds `bôa`), and will filter the results as you ty
 and keep the current item selected.
 
 You can search globally by switching to the Search tab. The search is case-insensitive and will search for artists,
-albums and tracks. It will pull **everything** without pagination, so it may take a while to load if you have a large
-library. This was done because jellyfin won't allow me to search for tracks without an artist or album assigned, which
-this client doesn't support.
+albums and tracks. Tracks are paginated. 
 
 ![search](.github/search.png)
 
