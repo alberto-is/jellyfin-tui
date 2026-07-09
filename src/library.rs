@@ -1851,15 +1851,32 @@ impl App {
 
         let has_cover = self.cover_art.is_some();
 
+        let has_lyrics = self
+            .lyrics
+            .as_ref()
+            .is_some_and(|(_, l, _)| !l.is_empty());
+
         let vertical = Layout::default()
             .direction(Direction::Vertical)
-            .constraints(vec![
-                Constraint::Percentage(5),
-                Constraint::Percentage(65),
-                Constraint::Percentage(15),
-                Constraint::Percentage(10),
-                Constraint::Percentage(5),
-            ])
+            .constraints(
+                if has_lyrics {
+                    vec![
+                        Constraint::Percentage(5),
+                        Constraint::Percentage(55),
+                        Constraint::Percentage(25),
+                        Constraint::Percentage(10),
+                        Constraint::Percentage(5),
+                    ]
+                } else {
+                    vec![
+                        Constraint::Percentage(5),
+                        Constraint::Percentage(65),
+                        Constraint::Percentage(15),
+                        Constraint::Percentage(10),
+                        Constraint::Percentage(5),
+                    ]
+                },
+            )
             .split(area);
 
         let cover_area = vertical[1];
@@ -1926,14 +1943,59 @@ impl App {
                     .centered()
                 };
 
-                vec![title, artists, album]
+                let mut result = vec![title, artists, album];
+
+                if let Some((_, lyrics, time_synced)) = &self.lyrics {
+                    if !lyrics.is_empty() {
+                        result.push(Line::from("").centered());
+
+                        let current_idx = if *time_synced {
+                            self.state.current_lyric
+                        } else {
+                            0
+                        };
+
+                        let start_idx = if current_idx > 0 { current_idx - 1 } else { 0 };
+                        let end_idx = std::cmp::min(start_idx + 3, lyrics.len());
+
+                        for i in start_idx..end_idx {
+                            let lyric = &lyrics[i];
+                            let style = if *time_synced && i == current_idx {
+                                Style::default()
+                                    .fg(self.theme.resolve(&self.theme.foreground))
+                                    .add_modifier(Modifier::BOLD)
+                            } else {
+                                Style::default().fg(self.theme.resolve(&self.theme.foreground_dim))
+                            };
+                            result.push(
+                                Line::from(vec![Span::styled(
+                                    &lyric.text,
+                                    style,
+                                )])
+                                .centered(),
+                            );
+                        }
+                    }
+                }
+
+                result
             }
             None => vec![Line::from("No track playing")
                 .fg(self.theme.resolve(&self.theme.foreground))
                 .centered()],
         };
 
-        frame.render_widget(Paragraph::new(lines).style(Style::default().fg(self.theme.resolve(&self.theme.foreground))), song_info_area);
+        let content_height = lines.len() as u16;
+        let centered_info = Rect {
+            x: song_info_area.x,
+            y: song_info_area.y + (song_info_area.height.saturating_sub(content_height)) / 2,
+            width: song_info_area.width,
+            height: content_height,
+        };
+        frame.render_widget(
+            Paragraph::new(lines).style(Style::default().fg(self.theme.resolve(&self.theme.foreground))),
+            centered_info,
+        );
 
         let progress_area = {
             let centered = Layout::default()
