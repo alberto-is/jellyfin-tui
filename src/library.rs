@@ -1854,11 +1854,11 @@ impl App {
         let vertical = Layout::default()
             .direction(Direction::Vertical)
             .constraints(vec![
-                Constraint::Percentage(20),
-                Constraint::Percentage(40),
-                Constraint::Percentage(20),
                 Constraint::Percentage(10),
+                Constraint::Percentage(60),
+                Constraint::Percentage(15),
                 Constraint::Percentage(10),
+                Constraint::Percentage(5),
             ])
             .split(area);
 
