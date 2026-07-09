@@ -2022,50 +2022,16 @@ impl App {
 
         let hint_area = vertical[4];
         let hint = Line::from(vec![
-            Span::styled(
-                "Esc",
-                Style::default()
-                    .fg(self.theme.primary_color)
-                    .add_modifier(Modifier::BOLD),
-            ),
-            Span::styled(
-                " exit zen  •   ",
-                Style::default().fg(self.theme.resolve(&self.theme.foreground_dim)),
-            ),
-            Span::styled(
-                "Space",
-                Style::default()
-                    .fg(self.theme.primary_color)
-                    .add_modifier(Modifier::BOLD),
-            ),
-            Span::styled(
-                " play/pause  •   ",
-                Style::default().fg(self.theme.resolve(&self.theme.foreground_dim)),
-            ),
-            Span::styled(
-                "N",
-                Style::default()
-                    .fg(self.theme.primary_color)
-                    .add_modifier(Modifier::BOLD),
-            ),
-            Span::styled(
-                " next  •   Shift+N",
-                Style::default().fg(self.theme.resolve(&self.theme.foreground_dim)),
-            ),
-            Span::styled(
-                " prev  •   ",
-                Style::default().fg(self.theme.resolve(&self.theme.foreground_dim)),
-            ),
-            Span::styled(
-                "← →",
-                Style::default()
-                    .fg(self.theme.primary_color)
-                    .add_modifier(Modifier::BOLD),
-            ),
-            Span::styled(
-                " seek",
-                Style::default().fg(self.theme.resolve(&self.theme.foreground_dim)),
-            ),
+            " Exit ".fg(self.theme.resolve(&self.theme.foreground)),
+            "<Esc>".fg(self.theme.primary_color).bold(),
+            " Play/Pause ".fg(self.theme.resolve(&self.theme.foreground)),
+            "<Space>".fg(self.theme.primary_color).bold(),
+            " Next ".fg(self.theme.resolve(&self.theme.foreground)),
+            "<N>".fg(self.theme.primary_color).bold(),
+            " Prev ".fg(self.theme.resolve(&self.theme.foreground)),
+            "<Shift+N>".fg(self.theme.primary_color).bold(),
+            " Seek ".fg(self.theme.resolve(&self.theme.foreground)),
+            "<← →>".fg(self.theme.primary_color).bold(),
         ])
         .centered();
 
