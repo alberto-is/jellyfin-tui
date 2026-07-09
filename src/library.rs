@@ -1854,8 +1854,8 @@ impl App {
         let vertical = Layout::default()
             .direction(Direction::Vertical)
             .constraints(vec![
-                Constraint::Percentage(10),
-                Constraint::Percentage(60),
+                Constraint::Percentage(5),
+                Constraint::Percentage(65),
                 Constraint::Percentage(15),
                 Constraint::Percentage(10),
                 Constraint::Percentage(5),
@@ -1865,19 +1865,19 @@ impl App {
         let cover_area = vertical[1];
 
         if has_cover {
-            let image_block = Block::default()
-                .borders(Borders::ALL)
-                .border_type(self.border_type)
-                .border_style(self.theme.resolve(&self.theme.border));
-
-            let inner = image_block.inner(cover_area);
-            frame.render_widget(&image_block, cover_area);
+            let margin = 1;
+            let inset = Rect {
+                x: cover_area.x + margin,
+                y: cover_area.y + margin,
+                width: cover_area.width.saturating_sub(margin * 2),
+                height: cover_area.height.saturating_sub(margin * 2),
+            };
 
             if let Some(cover_art) = self.cover_art.as_mut() {
-                let img_size = cover_art.size_for(Resize::Scale(None), inner);
+                let img_size = cover_art.size_for(Resize::Scale(None), inset);
                 let centered = Rect {
-                    x: inner.x + (inner.width.saturating_sub(img_size.width)) / 2,
-                    y: inner.y + (inner.height.saturating_sub(img_size.height)) / 2,
+                    x: inset.x + (inset.width.saturating_sub(img_size.width)) / 2,
+                    y: inset.y + (inset.height.saturating_sub(img_size.height)) / 2,
                     width: img_size.width,
                     height: img_size.height,
                 };
