@@ -1935,7 +1935,18 @@ impl App {
 
         frame.render_widget(Paragraph::new(lines).style(Style::default().fg(self.theme.resolve(&self.theme.foreground))), song_info_area);
 
-        let progress_area = vertical[3];
+        let progress_area = {
+            let centered = Layout::default()
+                .direction(Direction::Horizontal)
+                .flex(Flex::Center)
+                .constraints(vec![
+                    Constraint::Percentage(10),
+                    Constraint::Percentage(80),
+                    Constraint::Percentage(10),
+                ])
+                .split(vertical[3]);
+            centered[1]
+        };
 
         let total_seconds = current_song
             .map(|s| s.run_time_ticks as f64 / 10_000_000.0)
