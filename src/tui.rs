@@ -2141,7 +2141,9 @@ impl App {
 
         LineGauge::default()
             .block(Block::default().padding(Padding::horizontal(1)))
-            .filled_style(Style::default().fg(volume_color.1).add_modifier(Modifier::BOLD | dim_mod))
+            .filled_style(
+                Style::default().fg(volume_color.1).add_modifier(Modifier::BOLD | dim_mod),
+            )
             .label(
                 Line::from(format!("{}%", self.state.current_playback_state.volume))
                     .style(Style::default().fg(volume_color.0).add_modifier(dim_mod)),
