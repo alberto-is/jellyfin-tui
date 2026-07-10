@@ -2059,6 +2059,7 @@ impl App {
                         .fg(self.theme.resolve(&self.theme.progress_track))
                         .add_modifier(Modifier::BOLD),
                 )
+                .style(Style::default().fg(self.theme.resolve(&self.theme.foreground)))
                 .ratio(percentage.clamp(0.0, 100.0) / 100.0)
                 .label(Line::from(format!(
                     "{}   {:.0}% ",
