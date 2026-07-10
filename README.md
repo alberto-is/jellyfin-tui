@@ -145,6 +145,9 @@ lyrics: 'always' # options: 'always', 'never', 'auto'
 layout: auto # options: 'auto', 'vertical', 'horizontal'
 vertical_threshold: 100 # columns; only used when layout is 'auto'
 
+# Auto-enter zen mode (see below) after N idle minutes. 0/omitted = disabled.
+zen_mode_timeout_minutes: 0
+
 # Swap the play and pause icons
 swap_play_pause: false
 # Custom symbols — useful for Nerd Font users. Each character of `spinner` is one animation frame.
@@ -476,6 +479,14 @@ Press `Alt+Enter` (`PlayAll`) to play the entire discography, album, or playlist
 Learn more about what you can do with the queue by pressing `?` and reading through the key bindings.
 
 ![image](.github/queue.png)
+
+## Zen Mode
+
+Press `Z` for a fullscreen now-playing view — cover art, synced lyrics, progress bar, nothing else. `Esc` or `Z` to
+leave. Playback keys still work.
+
+`zen_mode_timeout_minutes` in `config.yaml` auto-enters it after N minutes idle (fractional ok, e.g. `0.5`). Off by
+default.
 
 ## Global Shuffle
 

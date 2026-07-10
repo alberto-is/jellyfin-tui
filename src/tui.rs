@@ -260,6 +260,7 @@ pub struct App {
     pub help_search: String,
     pub help_searching: bool,
     pub zen_mode: bool,
+    pub zen_mode_timeout: Option<Duration>,
     pub search_term: String,
     pub search_term_last: String,
 
@@ -536,6 +537,11 @@ impl App {
                 .and_then(|v| v.as_u64())
                 .unwrap_or(100) as u16,
             previous_song_parent_id: String::from(""),
+            zen_mode_timeout: config
+                .get("zen_mode_timeout_minutes")
+                .and_then(|v| v.as_f64())
+                .filter(|&v| v > 0.0)
+                .map(|m| Duration::from_secs_f64(m * 60.0)),
             active_song_id: String::from(""),
 
             swap_play_pause: config
@@ -1184,6 +1190,15 @@ impl App {
 
         self.process_terminal_events().await?;
 
+        if !self.zen_mode
+            && self
+                .zen_mode_timeout
+                .is_some_and(|timeout| self.recent_input_activity.elapsed() >= timeout)
+        {
+            self.zen_mode = true;
+            self.dirty = true;
+        }
+
         // Pump the platform run-loop (macOS: delivers MPRemoteCommandCenter events;
         // no-op on Linux/stub backends).
         if let Some(ref c) = self.controls {
@@ -1246,6 +1261,11 @@ impl App {
                 self.vertical_threshold =
                     new_config.get("vertical_threshold").and_then(|v| v.as_u64()).unwrap_or(100)
                         as u16;
+                self.zen_mode_timeout = new_config
+                    .get("zen_mode_timeout_minutes")
+                    .and_then(|v| v.as_f64())
+                    .filter(|&v| v > 0.0)
+                    .map(|m| Duration::from_secs_f64(m * 60.0));
                 self.symbols = new_config
                     .get("symbols")
                     .and_then(|v| serde_yaml::from_value(v.clone()).ok())
