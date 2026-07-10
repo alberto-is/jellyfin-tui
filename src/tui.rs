@@ -259,6 +259,7 @@ pub struct App {
     pub show_help: bool,
     pub help_search: String,
     pub help_searching: bool,
+    pub zen_mode: bool,
     pub search_term: String,
     pub search_term_last: String,
 
@@ -567,6 +568,7 @@ impl App {
 
             searching: false,
             show_help: false,
+            zen_mode: false,
             search_term: String::from(""),
             search_term_last: String::from(""),
             help_search: String::from(""),
@@ -1913,6 +1915,24 @@ impl App {
         if let Some(background) = self.theme.resolve_opt(&self.theme.background) {
             let background_block = Block::default().style(Style::default().bg(background));
             frame.render_widget(background_block, frame.area());
+        }
+
+        if self.zen_mode {
+            self.render_zen(frame);
+            if self.show_help {
+                render_help_modal(
+                    frame,
+                    frame.area(),
+                    &self.keymap,
+                    &self.keymap_error,
+                    &mut self.state.help_scroll_state,
+                    self.border_type,
+                    &self.theme,
+                    &self.help_search,
+                    self.help_searching,
+                );
+            }
+            return;
         }
 
         let app_container = Layout::default()
