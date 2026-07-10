@@ -481,8 +481,8 @@ impl App {
                 bitrate: config["transcoding"]["bitrate"]
                     .as_u64()
                     .and_then(|v| u32::try_from(v).ok())
-                    .unwrap_or(320),
-                container: config["transcoding"]["container"].as_str().unwrap_or("mp3").to_string(),
+                    .unwrap_or(256),
+                container: config["transcoding"]["container"].as_str().unwrap_or("aac").to_string(),
             },
             state: State::new(),
             preferences,

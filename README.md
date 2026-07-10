@@ -166,9 +166,10 @@ symbols:
 
 rounded_corners: true
 
+# jellyfin arbitrarily limits the bitrate of transcoded audio to 256kbps, so aac@256 is the best you can do
 transcoding:
-  bitrate: 320
-  # container: mp3
+  bitrate: 256
+  # container: aac
 
 # Discord Rich Presence. Shows your listening status on your Discord profile if Discord is running.
 discord: APPLICATION_ID
