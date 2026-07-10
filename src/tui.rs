@@ -2000,6 +2000,17 @@ impl App {
             .padding(" ", " ")
             .render(tabs_layout[0], buf);
 
+        self.render_status_bar(tabs_layout[1], tabs_layout[2], buf, false);
+    }
+
+    pub(crate) fn render_status_bar(
+        &self,
+        status_area: Rect,
+        volume_area: Rect,
+        buf: &mut Buffer,
+        dim: bool,
+    ) {
+        let dim_mod = if dim { Modifier::DIM } else { Modifier::empty() };
         let mut status_bar: Vec<Span> = vec![];
 
         if self.mpv_handle.dead.load(Ordering::Relaxed) {
@@ -2105,22 +2116,23 @@ impl App {
         Paragraph::new(Line::from(spaced))
             .alignment(Alignment::Right)
             .wrap(Wrap { trim: false })
-            .render(tabs_layout[1], buf);
+            .style(Style::default().add_modifier(dim_mod))
+            .render(status_area, buf);
 
         LineGauge::default()
             .block(Block::default().padding(Padding::horizontal(1)))
-            .filled_style(Style::default().fg(volume_color.1).add_modifier(Modifier::BOLD))
+            .filled_style(Style::default().fg(volume_color.1).add_modifier(Modifier::BOLD | dim_mod))
             .label(
                 Line::from(format!("{}%", self.state.current_playback_state.volume))
-                    .style(Style::default().fg(volume_color.0)),
+                    .style(Style::default().fg(volume_color.0).add_modifier(dim_mod)),
             )
             .unfilled_style(
                 Style::default()
                     .fg(self.theme.resolve(&self.theme.progress_track))
-                    .add_modifier(Modifier::BOLD),
+                    .add_modifier(Modifier::BOLD | dim_mod),
             )
             .ratio((self.state.current_playback_state.volume as f64 / 100.0).clamp(0.0, 1.0))
-            .render(tabs_layout[2], buf);
+            .render(volume_area, buf);
     }
 
     /// Fetch the discography of an artist

@@ -1851,7 +1851,8 @@ impl App {
 
         let has_cover = self.cover_art.is_some();
 
-        let has_lyrics = self.lyrics.as_ref().is_some_and(|(_, l, _)| !l.is_empty());
+        let has_lyrics =
+            self.lyrics.as_ref().is_some_and(|(_, l, synced)| *synced && !l.is_empty());
 
         let vertical = Layout::default()
             .direction(Direction::Vertical)
@@ -1873,6 +1874,17 @@ impl App {
                 ]
             })
             .split(area);
+
+        let top_bar_area = Rect { height: vertical[0].height.min(1), ..vertical[0] };
+        let top_bar_layout = Layout::default()
+            .direction(Direction::Horizontal)
+            .constraints(vec![
+                Constraint::Percentage(70),
+                Constraint::Percentage(30),
+                Constraint::Min(15),
+            ])
+            .split(top_bar_area);
+        self.render_status_bar(top_bar_layout[1], top_bar_layout[2], frame.buffer_mut(), true);
 
         let cover_area = vertical[1];
 
@@ -1940,17 +1952,17 @@ impl App {
                 let mut result = vec![title, artists, album];
 
                 if let Some((_, lyrics, time_synced)) = &self.lyrics {
-                    if !lyrics.is_empty() {
+                    if *time_synced && !lyrics.is_empty() {
                         result.push(Line::from("").centered());
 
-                        let current_idx = if *time_synced { self.state.current_lyric } else { 0 };
+                        let current_idx = self.state.current_lyric;
 
                         let start_idx = if current_idx > 0 { current_idx - 1 } else { 0 };
                         let end_idx = std::cmp::min(start_idx + 3, lyrics.len());
 
                         for i in start_idx..end_idx {
                             let lyric = &lyrics[i];
-                            let style = if *time_synced && i == current_idx {
+                            let style = if i == current_idx {
                                 Style::default()
                                     .fg(self.theme.resolve(&self.theme.foreground))
                                     .add_modifier(Modifier::BOLD)
@@ -2081,6 +2093,8 @@ impl App {
             "<Shift+N>".fg(self.theme.primary_color).bold(),
             " Seek ".fg(self.theme.resolve(&self.theme.foreground)),
             "<← →>".fg(self.theme.primary_color).bold(),
+            " Vol ".fg(self.theme.resolve(&self.theme.foreground)),
+            "<+/->".fg(self.theme.primary_color).bold(),
         ])
         .centered();
 

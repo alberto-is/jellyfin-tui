@@ -577,6 +577,7 @@ impl App {
                 Action::Next => self.next().await,
                 Action::Previous => self.previous().await,
                 Action::Seek(secs) => self.execute_seek(*secs).await,
+                Action::Volume(delta) => self.volume_delta(*delta).await,
 
                 Action::Up => {}
                 Action::Down => {}
