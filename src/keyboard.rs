@@ -577,8 +577,7 @@ impl App {
                 Action::Next => self.next().await,
                 Action::Previous => self.previous().await,
                 Action::Seek(secs) => self.execute_seek(*secs).await,
-                Action::VolumeUp => self.volume_up().await,
-                Action::VolumeDown => self.volume_down().await,
+
                 Action::Up => {}
                 Action::Down => {}
                 _ => {}

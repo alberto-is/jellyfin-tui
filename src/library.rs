@@ -1851,32 +1851,27 @@ impl App {
 
         let has_cover = self.cover_art.is_some();
 
-        let has_lyrics = self
-            .lyrics
-            .as_ref()
-            .is_some_and(|(_, l, _)| !l.is_empty());
+        let has_lyrics = self.lyrics.as_ref().is_some_and(|(_, l, _)| !l.is_empty());
 
         let vertical = Layout::default()
             .direction(Direction::Vertical)
-            .constraints(
-                if has_lyrics {
-                    vec![
-                        Constraint::Percentage(5),
-                        Constraint::Percentage(55),
-                        Constraint::Percentage(25),
-                        Constraint::Percentage(10),
-                        Constraint::Percentage(5),
-                    ]
-                } else {
-                    vec![
-                        Constraint::Percentage(5),
-                        Constraint::Percentage(65),
-                        Constraint::Percentage(15),
-                        Constraint::Percentage(10),
-                        Constraint::Percentage(5),
-                    ]
-                },
-            )
+            .constraints(if has_lyrics {
+                vec![
+                    Constraint::Percentage(5),
+                    Constraint::Percentage(55),
+                    Constraint::Percentage(25),
+                    Constraint::Percentage(10),
+                    Constraint::Percentage(5),
+                ]
+            } else {
+                vec![
+                    Constraint::Percentage(5),
+                    Constraint::Percentage(65),
+                    Constraint::Percentage(15),
+                    Constraint::Percentage(10),
+                    Constraint::Percentage(5),
+                ]
+            })
             .split(area);
 
         let cover_area = vertical[1];
@@ -1891,7 +1886,8 @@ impl App {
             };
 
             if let Some(cover_art) = self.cover_art.as_mut() {
-                let img_size = cover_art.size_for(Resize::Scale(None), inset);
+                let img_size =
+                    cover_art.size_for(Resize::Scale(None), Size::new(inset.width, inset.height));
                 let centered = Rect {
                     x: inset.x + (inset.width.saturating_sub(img_size.width)) / 2,
                     y: inset.y + (inset.height.saturating_sub(img_size.height)) / 2,
@@ -1907,14 +1903,12 @@ impl App {
 
         let lines: Vec<Line> = match current_song {
             Some(song) => {
-                let title = Line::from(vec![
-                    Span::styled(
-                        &song.name,
-                        Style::default()
-                            .fg(self.theme.resolve(&self.theme.foreground))
-                            .add_modifier(Modifier::BOLD),
-                    ),
-                ])
+                let title = Line::from(vec![Span::styled(
+                    &song.name,
+                    Style::default()
+                        .fg(self.theme.resolve(&self.theme.foreground))
+                        .add_modifier(Modifier::BOLD),
+                )])
                 .centered();
 
                 let artists = Line::from(vec![Span::styled(
@@ -1949,11 +1943,7 @@ impl App {
                     if !lyrics.is_empty() {
                         result.push(Line::from("").centered());
 
-                        let current_idx = if *time_synced {
-                            self.state.current_lyric
-                        } else {
-                            0
-                        };
+                        let current_idx = if *time_synced { self.state.current_lyric } else { 0 };
 
                         let start_idx = if current_idx > 0 { current_idx - 1 } else { 0 };
                         let end_idx = std::cmp::min(start_idx + 3, lyrics.len());
@@ -1968,11 +1958,7 @@ impl App {
                                 Style::default().fg(self.theme.resolve(&self.theme.foreground_dim))
                             };
                             result.push(
-                                Line::from(vec![Span::styled(
-                                    &lyric.text,
-                                    style,
-                                )])
-                                .centered(),
+                                Line::from(vec![Span::styled(&lyric.text, style)]).centered(),
                             );
                         }
                     }
@@ -1993,7 +1979,8 @@ impl App {
             height: content_height,
         };
         frame.render_widget(
-            Paragraph::new(lines).style(Style::default().fg(self.theme.resolve(&self.theme.foreground))),
+            Paragraph::new(lines)
+                .style(Style::default().fg(self.theme.resolve(&self.theme.foreground))),
             centered_info,
         );
 
@@ -2064,11 +2051,11 @@ impl App {
                 .label(Line::from(format!(
                     "{}   {:.0}% ",
                     if self.buffering {
-                        self.spinner_stages[self.spinner]
+                        self.spinner_stages[self.spinner].clone()
                     } else if self.paused ^ self.swap_play_pause {
-                        "⏸︎"
+                        "⏸︎".to_string()
                     } else {
-                        "►"
+                        "►".to_string()
                     },
                     percentage,
                 ))),

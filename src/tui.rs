@@ -1928,6 +1928,8 @@ impl App {
                     &mut self.state.help_scroll_state,
                     self.border_type,
                     &self.theme,
+                    &self.help_search,
+                    self.help_searching,
                 );
             }
             return;
