@@ -240,7 +240,8 @@ impl tui::App {
                     self.state.tracks_scroll_state = ScrollbarState::new(std::cmp::max(
                         0,
                         self.tracks.len() as i32 - 1,
-                    ) as usize);
+                    )
+                        as usize);
                     self.queue_discography_update(artist_id);
                 }
             }
@@ -253,10 +254,10 @@ impl tui::App {
 
                 if let Some(tracks) = tracks.filter(|t| !t.is_empty()) {
                     self.album_tracks = tracks;
-                    self.state.album_tracks_scroll_state = ScrollbarState::new(std::cmp::max(
-                        0,
-                        self.album_tracks.len() as i32 - 1,
-                    ) as usize);
+                    self.state.album_tracks_scroll_state =
+                        ScrollbarState::new(
+                            std::cmp::max(0, self.album_tracks.len() as i32 - 1) as usize
+                        );
                 }
             }
             Status::PlaylistFetched { generation, result } => {
@@ -269,10 +270,10 @@ impl tui::App {
                 if let Some((tracks, incomplete)) = result.filter(|(t, _)| !t.is_empty()) {
                     self.playlist_tracks = tracks;
                     self.playlist_incomplete = incomplete;
-                    self.state.playlist_tracks_scroll_state = ScrollbarState::new(std::cmp::max(
-                        0,
-                        self.playlist_tracks.len() as i32 - 1,
-                    ) as usize);
+                    self.state.playlist_tracks_scroll_state =
+                        ScrollbarState::new(
+                            std::cmp::max(0, self.playlist_tracks.len() as i32 - 1) as usize,
+                        );
                 }
             }
             Status::PlaylistUpdated { id } => {

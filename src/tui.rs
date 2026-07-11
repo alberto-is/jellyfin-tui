@@ -607,12 +607,8 @@ impl App {
             // `true` => default 0.6s delay, a number => that many seconds (0 = instant),
             // false/omitted/negative => disabled
             auto_browse: config.get("auto_browse").and_then(|v| {
-                if v.as_bool() == Some(true) {
-                    Some(0.6)
-                } else {
-                    v.as_f64().filter(|&s| s >= 0.0)
-                }
-                .map(Duration::from_secs_f64)
+                if v.as_bool() == Some(true) { Some(0.6) } else { v.as_f64().filter(|&s| s >= 0.0) }
+                    .map(Duration::from_secs_f64)
             }),
             auto_browse_since: Instant::now(),
             auto_browse_armed_index: None,
@@ -2238,10 +2234,7 @@ impl App {
         let in_context = self.state.active_section == ActiveSection::List
             && !self.locally_searching
             && self.popup.current_menu.is_none()
-            && matches!(
-                tab,
-                ActiveTab::Library | ActiveTab::Albums | ActiveTab::Playlists
-            );
+            && matches!(tab, ActiveTab::Library | ActiveTab::Albums | ActiveTab::Playlists);
 
         if !in_context {
             // disarm so returning to a browsable list starts a fresh timeout
@@ -2406,7 +2399,6 @@ impl App {
         self.state.tracks_scroll_state =
             ScrollbarState::new(std::cmp::max(0, self.tracks.len() as i32 - 1) as usize);
     }
-
 
     pub async fn album_tracks(&mut self, album_id: &String) {
         // already open (or loading)? just take focus (see discography for the why)
