@@ -20,6 +20,27 @@ use std::fs::OpenOptions;
 use tokio::process::Command;
 use unicode_normalization::char::decompose_canonical;
 
+/// A cancellable background fetch. `generation` tags each request so stale results
+/// can be dropped; `task` lets us abort the one in flight.
+#[derive(Default)]
+pub struct AsyncLoad {
+    pub loading: bool,
+    pub generation: u64,
+    pub task: Option<tokio::task::JoinHandle<()>>,
+}
+
+impl AsyncLoad {
+    /// Cancel any running fetch and return a fresh generation for the new one.
+    pub fn begin(&mut self) -> u64 {
+        self.generation = self.generation.wrapping_add(1);
+        if let Some(task) = self.task.take() {
+            task.abort();
+        }
+        self.loading = false;
+        self.generation
+    }
+}
+
 fn log_at(
     level: log::Level,
     loc: &std::panic::Location<'_>,

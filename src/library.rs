@@ -1189,10 +1189,24 @@ impl App {
         };
 
         if self.tracks.is_empty() {
-            let message_paragraph = Paragraph::new("jellyfin-tui")
+            // show a spinner while the discography is being fetched
+            let (body, title) = if self.discography_load.loading {
+                (
+                    format!("{} Fetching discography", &self.spinner_stages[self.spinner]),
+                    Line::from(if self.state.current_artist.name.is_empty() {
+                        "Tracks".to_string()
+                    } else {
+                        self.state.current_artist.name.clone()
+                    })
+                    .fg(section_title_color),
+                )
+            } else {
+                ("jellyfin-tui".to_string(), Line::from("Tracks").fg(section_title_color))
+            };
+            let message_paragraph = Paragraph::new(body)
                 .block(
                     track_block
-                        .title(Line::from("Tracks").fg(section_title_color))
+                        .title(title)
                         .fg(self.theme.resolve(&self.theme.border))
                         .border_type(self.border_type)
                         .padding(Padding::new(0, 0, center[0].height / 2, 0))
@@ -1462,10 +1476,24 @@ impl App {
         };
 
         if self.album_tracks.is_empty() {
-            let message_paragraph = Paragraph::new("jellyfin-tui")
+            // show a spinner while the album is being fetched
+            let (body, title) = if self.album_load.loading {
+                (
+                    format!("{} Fetching album", &self.spinner_stages[self.spinner]),
+                    Line::from(if self.state.current_album.name.is_empty() {
+                        "Tracks".to_string()
+                    } else {
+                        self.state.current_album.name.clone()
+                    })
+                    .fg(section_title_color),
+                )
+            } else {
+                ("jellyfin-tui".to_string(), Line::from("Tracks").fg(section_title_color))
+            };
+            let message_paragraph = Paragraph::new(body)
                 .block(
                     track_block
-                        .title(Line::from("Tracks").fg(section_title_color))
+                        .title(title)
                         .fg(self.theme.resolve(&self.theme.border))
                         .border_type(self.border_type)
                         .padding(Padding::new(0, 0, center[0].height / 2, 0))

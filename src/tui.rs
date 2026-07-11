@@ -15,7 +15,7 @@ use crate::client::{
 use crate::config::LyricsVisibility;
 use crate::database;
 use crate::database::database::{
-    Command, DownloadCommand, DownloadItem, JellyfinCommand, UpdateCommand,
+    Command, DownloadCommand, DownloadItem, JellyfinCommand, Status, UpdateCommand,
 };
 use crate::database::extension::{
     get_album_tracks, get_albums_with_tracks, get_all_albums, get_all_artists, get_all_playlists,
@@ -23,7 +23,7 @@ use crate::database::extension::{
     get_playlists_with_tracks, insert_lyrics,
 };
 use crate::help::{build_tab_labels, render_help_modal};
-use crate::helpers::{LogErr, Preferences, State, Symbols};
+use crate::helpers::{search_ranked_indices, AsyncLoad, LogErr, Preferences, State, Symbols};
 use crate::keyboard::{try_load_keymap, ActiveSection, ActiveTab, Selectable};
 use crate::mpv::MpvHandle;
 use crate::popup::PopupState;
@@ -268,6 +268,19 @@ pub struct App {
 
     // this means some new data has been fetched
     pub discography_stale: bool,
+    // background fetches for uncached lists, applied via Status::*Fetched
+    pub discography_load: AsyncLoad,
+    pub album_load: AsyncLoad,
+    pub playlist_load: AsyncLoad,
+    // debounced background refresh: (artist_id, queued_at)
+    pub pending_discography_update: Option<(String, Instant)>,
+
+    // open the selected item automatically once it's rested for this long
+    pub auto_browse: Option<Duration>,
+    auto_browse_since: Instant,
+    auto_browse_armed_index: Option<usize>,
+    auto_browse_armed_tab: Option<ActiveTab>,
+    auto_browse_handled: bool,
     pub playlist_stale: bool,
     pub playlist_incomplete: bool, // we fetch 300 first, and fill the DB with the rest. Speeds up load times of HUGE playlists :)
     pub playlist_editing: bool, // this means the playlist has been changed by the user (such as changing track order). Send after ops done for obvious reasons
@@ -312,9 +325,7 @@ pub struct App {
     pub receiver: Receiver<MpvPlaybackState>,
     // and to avoid a jumpy tui we throttle this update to fast changing values
     pub last_meta_update: Instant,
-    // wall-clock instant at which `current_playback_state.position` last changed.
-    // mpv only pushes a fresh position roughly once per second, so we interpolate
-    // from this timestamp to get an accurate sub-second position for lyric timing.
+    // when position last changed; we interpolate from here for sub-second lyric timing
     pub position_updated_at: Instant,
     pub recent_input_activity: Instant,
     last_state_saved: Instant,
@@ -587,6 +598,24 @@ impl App {
             locally_searching: false,
 
             discography_stale: client.is_some(),
+            discography_load: AsyncLoad::default(),
+            album_load: AsyncLoad::default(),
+            playlist_load: AsyncLoad::default(),
+            pending_discography_update: None,
+            // `true` => default 0.6s delay, a number => that many seconds (0 = instant),
+            // false/omitted/negative => disabled
+            auto_browse: config.get("auto_browse").and_then(|v| {
+                if v.as_bool() == Some(true) {
+                    Some(0.6)
+                } else {
+                    v.as_f64().filter(|&s| s >= 0.0)
+                }
+                .map(Duration::from_secs_f64)
+            }),
+            auto_browse_since: Instant::now(),
+            auto_browse_armed_index: None,
+            auto_browse_armed_tab: None,
+            auto_browse_handled: false,
             playlist_stale: client.is_some(),
             playlist_incomplete: false,
             playlist_editing: false,
@@ -1186,6 +1215,8 @@ impl App {
             .unwrap_or_default();
 
         self.report_progress_if_needed().await?;
+        self.flush_discography_update().await;
+        self.handle_auto_browse().await;
         self.handle_lyrics_scroll().await;
         self.handle_scrobble(&current_song).await?;
         self.handle_song_change(&current_song).await?;
@@ -1271,6 +1302,14 @@ impl App {
                     .and_then(|v| v.as_f64())
                     .filter(|&v| v > 0.0)
                     .map(|m| Duration::from_secs_f64(m * 60.0));
+                self.auto_browse = new_config.get("auto_browse").and_then(|v| {
+                    if v.as_bool() == Some(true) {
+                        Some(0.6)
+                    } else {
+                        v.as_f64().filter(|&s| s >= 0.0)
+                    }
+                    .map(Duration::from_secs_f64)
+                });
                 self.symbols = new_config
                     .get("symbols")
                     .and_then(|v| serde_yaml::from_value(v.clone()).ok())
@@ -1320,6 +1359,7 @@ impl App {
         let old_position = self.state.current_playback_state.position;
         let new_position = state.position;
 
+        // stamp the time whenever position actually moves, to interpolate from
         if (new_position - old_position).abs() > f64::EPSILON {
             self.position_updated_at = Instant::now();
         }
@@ -1351,7 +1391,7 @@ impl App {
 
         self.buffering = state.buffering;
 
-        // lyrics positioning guard if paused to not add the whole duration at once
+        // hold the anchor while paused/buffering so resuming doesn't jump the lyrics
         if self.paused || self.buffering {
             self.position_updated_at = Instant::now();
         }
@@ -1479,8 +1519,10 @@ impl App {
             if !*time_synced {
                 return None;
             }
+            // nudge lines in slightly early so they land as the vocal starts
             const LYRIC_EARLY_OFFSET_S: f64 = 0.25;
 
+            // mpv's position is ~1s stale between pushes, so add the elapsed time
             let mut current_time = self.state.current_playback_state.position;
             if !self.paused && !self.buffering {
                 current_time += self.position_updated_at.elapsed().as_secs_f64();
@@ -2176,51 +2218,171 @@ impl App {
             .render(volume_area, buf);
     }
 
-    /// Fetch the discography of an artist
-    /// This will change the active section to tracks
+    /// When auto_browse is on, open the item (discography / album / playlist) the
+    /// selection has been resting on. Focus stays on the list so you can keep scrolling.
+    async fn handle_auto_browse(&mut self) {
+        let Some(timeout) = self.auto_browse else {
+            return;
+        };
+
+        let tab = self.state.active_tab;
+        let in_context = self.state.active_section == ActiveSection::List
+            && !self.locally_searching
+            && self.popup.current_menu.is_none()
+            && matches!(
+                tab,
+                ActiveTab::Library | ActiveTab::Albums | ActiveTab::Playlists
+            );
+
+        if !in_context {
+            // disarm so returning to a browsable list starts a fresh timeout
+            self.auto_browse_armed_index = None;
+            self.auto_browse_armed_tab = None;
+            return;
+        }
+
+        let selected = match tab {
+            ActiveTab::Library => self.state.selected_artist.selected(),
+            ActiveTab::Albums => self.state.selected_album.selected(),
+            ActiveTab::Playlists => self.state.selected_playlist.selected(),
+            _ => None,
+        };
+
+        // (re)arm when the selection moves or we switch to a different list
+        if self.auto_browse_armed_index != selected || self.auto_browse_armed_tab != Some(tab) {
+            self.auto_browse_armed_index = selected;
+            self.auto_browse_armed_tab = Some(tab);
+            self.auto_browse_since = Instant::now();
+            self.auto_browse_handled = false;
+            return;
+        }
+
+        // only act once per rest, so we don't re-rank the list every tick
+        if self.auto_browse_handled || self.auto_browse_since.elapsed() < timeout {
+            return;
+        }
+        self.auto_browse_handled = true;
+
+        // resolve the selection against the filtered list and open it, unless already open
+        match tab {
+            ActiveTab::Library => {
+                let indices =
+                    search_ranked_indices(&self.artists, &self.state.artists_search_term, true);
+                let id = selected
+                    .and_then(|i| indices.get(i))
+                    .and_then(|&idx| self.artists.get(idx))
+                    .map(|a| a.id.clone());
+                if let Some(id) = id.filter(|id| *id != self.state.current_artist.id) {
+                    self.discography(&id).await;
+                    self.state.selected_track.select(Some(0));
+                }
+            }
+            ActiveTab::Albums => {
+                let indices =
+                    search_ranked_indices(&self.albums, &self.state.albums_search_term, true);
+                let id = selected
+                    .and_then(|i| indices.get(i))
+                    .and_then(|&idx| self.albums.get(idx))
+                    .map(|a| a.id.clone());
+                if let Some(id) = id.filter(|id| *id != self.state.current_album.id) {
+                    self.album_tracks(&id).await;
+                    self.state.selected_album_track.select(Some(0));
+                }
+            }
+            ActiveTab::Playlists => {
+                let indices =
+                    search_ranked_indices(&self.playlists, &self.state.playlists_search_term, true);
+                let id = selected
+                    .and_then(|i| indices.get(i))
+                    .and_then(|&idx| self.playlists.get(idx))
+                    .map(|p| p.id.clone());
+                if let Some(id) = id.filter(|id| *id != self.state.current_playlist.id) {
+                    self.playlist(&id, Some(200)).await;
+                    self.state.selected_playlist_track.select(Some(0));
+                }
+            }
+            _ => {}
+        }
+
+        // keep focus on the list; the openers move it to Tracks
+        self.state.active_section = ActiveSection::List;
+        self.dirty = true;
+    }
+
+    /// Queue a background discography refresh, debounced so scrolling through
+    /// artists only refreshes the one you land on.
+    pub fn queue_discography_update(&mut self, artist_id: String) {
+        self.pending_discography_update = Some((artist_id, Instant::now()));
+    }
+
+    /// Send the queued refresh once it's sat untouched for the debounce window.
+    async fn flush_discography_update(&mut self) {
+        const DEBOUNCE: Duration = Duration::from_millis(750);
+        let ready = self
+            .pending_discography_update
+            .as_ref()
+            .is_some_and(|(_, queued_at)| queued_at.elapsed() >= DEBOUNCE);
+        if ready {
+            if let Some((artist_id, _)) = self.pending_discography_update.take() {
+                let _ = self
+                    .db
+                    .cmd_tx
+                    .send(Command::Update(UpdateCommand::Discography { artist_id }))
+                    .await
+                    .log_dbg("queue discography update");
+            }
+        }
+    }
+
+    /// Fetch the discography of an artist. Switches the active section to tracks.
     pub async fn discography(&mut self, id: &str) {
+        // already open (or loading)? just take focus — the DB may not have cached the
+        // last fetch yet, so refetching would miss and hit the network again. an empty,
+        // non-loading state falls through so a failed fetch can be retried.
+        if !id.is_empty()
+            && id == self.state.current_artist.id
+            && (!self.tracks.is_empty() || self.discography_load.loading)
+        {
+            self.state.active_section = ActiveSection::Tracks;
+            return;
+        }
+
         self.discography_stale = false;
+        let generation = self.discography_load.begin();
+        self.tracks = vec![];
+
         if id.is_empty() {
             return;
         }
-        self.tracks = vec![];
 
-        // we first try the database. If there are no tracks, or an error, we try the online route.
-        // after an offline pull, we query for updates in the background
-        // TODO: this can be compacted
+        // set up front so the loading header shows the artist name
+        self.state.current_artist =
+            self.artists.iter().find(|a| a.id == id).cloned().unwrap_or_default();
+
+        // DB first (fast); if it's empty, fetch online off the UI loop
         match get_discography(&self.db.pool, id, self.client.as_ref()).await {
             Ok(tracks) if !tracks.is_empty() => {
                 self.state.active_section = ActiveSection::Tracks;
                 self.group_tracks_into_albums(tracks, None);
-                // run the update query in the background if online
                 if self.client.is_some() {
                     self.discography_stale = true;
-                    let _ = self
-                        .db
-                        .cmd_tx
-                        .send(Command::Update(UpdateCommand::Discography {
-                            artist_id: id.to_string(),
-                        }))
-                        .await
-                        .log_dbg("queue discography update");
+                    self.queue_discography_update(id.to_string());
                 }
             }
-            // if we get here, it means the DB call returned either
-            // empty tracks, or an error. We'll try the pure online route next.
+            // DB empty or errored — fetch online in the background, applied later
+            // in handle_database_status
             _ => {
-                if let Some(client) = self.client.as_ref() {
-                    if let Ok(tracks) = client.discography(id).await {
-                        self.state.active_section = ActiveSection::Tracks;
-                        self.group_tracks_into_albums(tracks, None);
-                        let _ = self
-                            .db
-                            .cmd_tx
-                            .send(Command::Update(UpdateCommand::Discography {
-                                artist_id: id.to_string(),
-                            }))
-                            .await
-                            .log_dbg("queue discography update");
-                    }
+                if let Some(client) = self.client.clone() {
+                    self.discography_load.loading = true;
+                    self.state.active_section = ActiveSection::Tracks;
+                    let tx = self.db.status_tx.clone();
+                    let artist_id = id.to_string();
+                    self.discography_load.task = Some(tokio::spawn(async move {
+                        let tracks = client.discography(&artist_id).await.ok();
+                        let _ = tx
+                            .send(Status::DiscographyFetched { generation, artist_id, tracks })
+                            .await;
+                    }));
                 } else {
                     // a catch-all for db errors
                     let _ = self
@@ -2234,11 +2396,19 @@ impl App {
         }
         self.state.tracks_scroll_state =
             ScrollbarState::new(std::cmp::max(0, self.tracks.len() as i32 - 1) as usize);
-        self.state.current_artist =
-            self.artists.iter().find(|a| a.id == id).cloned().unwrap_or_default();
     }
 
+
     pub async fn album_tracks(&mut self, album_id: &String) {
+        // already open (or loading)? just take focus (see discography for the why)
+        if album_id == &self.state.current_album.id
+            && (!self.album_tracks.is_empty() || self.album_load.loading)
+        {
+            self.state.active_section = ActiveSection::Tracks;
+            return;
+        }
+
+        let generation = self.album_load.begin();
         self.album_tracks = vec![];
 
         let album = match self.albums.iter().find(|a| a.id == *album_id).cloned() {
@@ -2247,19 +2417,25 @@ impl App {
                 return;
             }
         };
-        // we first try the database. If there are no tracks, or an error, we try the online route.
-        // after an offline pull, we query for updates in the background
+        // set up front so the loading header shows the album name
+        self.state.current_album = album.clone();
+
+        // DB first (fast); if it's empty, fetch online off the UI loop
         match get_album_tracks(&self.db.pool, &album.id, self.client.as_ref()).await {
             Ok(tracks) if !tracks.is_empty() => {
                 self.state.active_section = ActiveSection::Tracks;
                 self.album_tracks = tracks;
             }
             _ => {
-                if let Some(client) = self.client.as_ref() {
-                    if let Ok(tracks) = client.album_tracks(&album.id).await {
-                        self.state.active_section = ActiveSection::Tracks;
-                        self.album_tracks = tracks;
-                    }
+                if let Some(client) = self.client.clone() {
+                    self.album_load.loading = true;
+                    self.state.active_section = ActiveSection::Tracks;
+                    let tx = self.db.status_tx.clone();
+                    let album_id = album.id.clone();
+                    self.album_load.task = Some(tokio::spawn(async move {
+                        let tracks = client.album_tracks(&album_id).await.ok();
+                        let _ = tx.send(Status::AlbumTracksFetched { generation, tracks }).await;
+                    }));
                 } else {
                     let _ = self
                         .db
@@ -2272,13 +2448,12 @@ impl App {
         }
         self.state.album_tracks_scroll_state =
             ScrollbarState::new(std::cmp::max(0, self.album_tracks.len() as i32 - 1) as usize);
-        self.state.current_album =
-            self.albums.iter().find(|a| a.id == *album.id).cloned().unwrap_or_default();
 
         if self.client.is_none() {
             return;
         }
 
+        // refresh the album artists' discographies in the background
         for artist in &album.album_artists {
             let _ = self
                 .db
@@ -2290,8 +2465,18 @@ impl App {
     }
 
     pub async fn playlist(&mut self, album_id: &String, limit: Option<usize>) {
+        // already open (or loading)? just take focus (see discography for the why)
+        if album_id == &self.state.current_playlist.id
+            && (!self.playlist_tracks.is_empty() || self.playlist_load.loading)
+        {
+            self.state.active_section = ActiveSection::Tracks;
+            return;
+        }
+
         self.playlist_incomplete = false;
         self.playlist_stale = false;
+        let generation = self.playlist_load.begin();
+
         let playlist = match self.playlists.iter().find(|a| a.id == *album_id).cloned() {
             Some(playlist) => playlist,
             None => {
@@ -2299,22 +2484,29 @@ impl App {
             }
         };
         self.playlist_tracks = vec![];
-        // we first try the database. If there are no tracks, or an error, we try the online route.
-        // after an offline pull, we query for updates in the background
+        // set up front so the loading header shows the playlist name
+        self.state.current_playlist = playlist.clone();
+
+        // DB first (fast); if it's empty, fetch online off the UI loop
         match get_playlist_tracks(&self.db.pool, &playlist.id, self.client.as_ref()).await {
             Ok(tracks) if !tracks.is_empty() => {
                 self.state.active_section = ActiveSection::Tracks;
                 self.playlist_tracks = tracks;
             }
             _ => {
-                if let Some(client) = self.client.as_ref() {
-                    if let Ok(tracks) = client.playlist(&playlist.id, limit).await {
-                        self.state.active_section = ActiveSection::Tracks;
-                        self.playlist_tracks = tracks.items;
-                        if self.playlist_tracks.len() != tracks.total_record_count as usize {
-                            self.playlist_incomplete = true;
-                        }
-                    }
+                if let Some(client) = self.client.clone() {
+                    self.playlist_load.loading = true;
+                    self.state.active_section = ActiveSection::Tracks;
+                    let tx = self.db.status_tx.clone();
+                    let playlist_id = playlist.id.clone();
+                    self.playlist_load.task = Some(tokio::spawn(async move {
+                        // carry the "incomplete" flag (fetched fewer than the total)
+                        let result = client.playlist(&playlist_id, limit).await.ok().map(|d| {
+                            let incomplete = d.items.len() != d.total_record_count as usize;
+                            (d.items, incomplete)
+                        });
+                        let _ = tx.send(Status::PlaylistFetched { generation, result }).await;
+                    }));
                 } else {
                     let _ = self
                         .db
@@ -2327,8 +2519,6 @@ impl App {
         }
         self.state.playlist_tracks_scroll_state =
             ScrollbarState::new(std::cmp::max(0, self.playlist_tracks.len() as i32 - 1) as usize);
-        self.state.current_playlist =
-            self.playlists.iter().find(|a| a.id == *playlist.id).cloned().unwrap_or_default();
 
         if self.client.is_none() {
             return;

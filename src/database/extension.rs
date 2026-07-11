@@ -8,6 +8,7 @@ use crate::{
     popup::PopupMenu,
     tui,
 };
+use ratatui::widgets::ScrollbarState;
 use serde::{Deserialize, Serialize};
 use sqlx::migrate::Migrator;
 use sqlx::sqlite::{SqliteConnectOptions, SqliteJournalMode, SqlitePoolOptions};
@@ -223,6 +224,55 @@ impl tui::App {
                         }
                         _ => {}
                     }
+                }
+            }
+            Status::DiscographyFetched { generation, artist_id, tracks } => {
+                // stale result — the user moved on to another artist
+                if generation != self.discography_load.generation {
+                    return;
+                }
+                self.discography_load.loading = false;
+                self.discography_load.task = None;
+
+                if let Some(tracks) = tracks.filter(|t| !t.is_empty()) {
+                    // don't grab focus — the user may be auto-browsing while this loads
+                    self.group_tracks_into_albums(tracks, None);
+                    self.state.tracks_scroll_state = ScrollbarState::new(std::cmp::max(
+                        0,
+                        self.tracks.len() as i32 - 1,
+                    ) as usize);
+                    self.queue_discography_update(artist_id);
+                }
+            }
+            Status::AlbumTracksFetched { generation, tracks } => {
+                if generation != self.album_load.generation {
+                    return;
+                }
+                self.album_load.loading = false;
+                self.album_load.task = None;
+
+                if let Some(tracks) = tracks.filter(|t| !t.is_empty()) {
+                    self.album_tracks = tracks;
+                    self.state.album_tracks_scroll_state = ScrollbarState::new(std::cmp::max(
+                        0,
+                        self.album_tracks.len() as i32 - 1,
+                    ) as usize);
+                }
+            }
+            Status::PlaylistFetched { generation, result } => {
+                if generation != self.playlist_load.generation {
+                    return;
+                }
+                self.playlist_load.loading = false;
+                self.playlist_load.task = None;
+
+                if let Some((tracks, incomplete)) = result.filter(|(t, _)| !t.is_empty()) {
+                    self.playlist_tracks = tracks;
+                    self.playlist_incomplete = incomplete;
+                    self.state.playlist_tracks_scroll_state = ScrollbarState::new(std::cmp::max(
+                        0,
+                        self.playlist_tracks.len() as i32 - 1,
+                    ) as usize);
                 }
             }
             Status::PlaylistUpdated { id } => {

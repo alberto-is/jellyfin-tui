@@ -50,6 +50,10 @@ pub enum Status {
     PlaylistsUpdated,
 
     DiscographyUpdated { id: String },
+    // async fetch results; `generation` lets the UI drop ones it no longer wants
+    DiscographyFetched { generation: u64, artist_id: String, tracks: Option<Vec<DiscographySong>> },
+    AlbumTracksFetched { generation: u64, tracks: Option<Vec<DiscographySong>> },
+    PlaylistFetched { generation: u64, result: Option<(Vec<DiscographySong>, bool)> },
     PlaylistUpdated { id: String },
 
     UpdateStarted,

@@ -148,6 +148,12 @@ vertical_threshold: 100 # columns; only used when layout is 'auto'
 # Auto-enter zen mode (see below) after N idle minutes. 0/omitted = disabled.
 zen_mode_timeout_minutes: 0
 
+# Auto-open the selected artist/album/playlist once the selection rests on it, so
+# you can scroll a list without pressing enter. `true` uses a sane default delay;
+# a number sets the delay in seconds (e.g. 0.8), and 0 opens instantly on rest.
+# false/omitted = disabled.
+auto_browse: false
+
 # Swap the play and pause icons
 swap_play_pause: false
 # Custom symbols — useful for Nerd Font users. Each character of `spinner` is one animation frame.
