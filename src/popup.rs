@@ -327,7 +327,7 @@ impl PopupMenu {
             // ---------- Global commands ---------- //
             PopupMenu::GlobalRoot { large_art, track_based_art, downloading, .. } => vec![
                 PopupAction::new(
-                    "Synchronize with Jellyfin (runs every 10 minutes)".to_string(),
+                    "Synchronize with Jellyfin (runs every 30 minutes)".to_string(),
                     PopupCommand::Refresh,
                     Style::default(),
                     true,
