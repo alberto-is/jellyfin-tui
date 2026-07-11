@@ -38,6 +38,25 @@ pub enum Command {
     DislikeTrack { track_id: String, disliked: bool },
 }
 
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum UpdateStage {
+    Fetching,
+    Artists,
+    Albums,
+    Playlists,
+}
+
+impl UpdateStage {
+    pub fn label(&self) -> &'static str {
+        match self {
+            UpdateStage::Fetching => "fetching",
+            UpdateStage::Artists => "Artists",
+            UpdateStage::Albums => "Albums",
+            UpdateStage::Playlists => "Playlists",
+        }
+    }
+}
+
 pub enum Status {
     TrackQueued { id: String },
     TrackDownloading { track: DiscographySong },
@@ -57,6 +76,8 @@ pub enum Status {
     PlaylistUpdated { id: String },
 
     UpdateStarted,
+    // which phase the global updater is in, and how far through it is (0.0..=1.0)
+    UpdateProgress { stage: UpdateStage, progress: Option<f32> },
     UpdateFinished,
     UpdateFailed { error: String },
 
@@ -128,8 +149,8 @@ pub async fn t_database<'a>(
 
     let mut db_interval = tokio::time::interval(Duration::from_secs(1));
     let mut large_update_interval = tokio::time::interval_at(
-        tokio::time::Instant::now() + Duration::from_secs(60 * 10),
-        Duration::from_secs(60 * 10),
+        tokio::time::Instant::now() + Duration::from_secs(60 * 30),
+        Duration::from_secs(60 * 30),
     );
 
     if !online || client.is_none() {
@@ -520,6 +541,12 @@ async fn t_offline_tracks_checker(
     }
 }
 
+async fn send_progress(tx: &Option<Sender<Status>>, stage: UpdateStage, progress: Option<f32>) {
+    if let Some(tx) = tx {
+        let _ = tx.send(Status::UpdateProgress { stage, progress }).await;
+    }
+}
+
 pub async fn data_updater(
     pool: Arc<Pool<Sqlite>>,
     tx: Option<Sender<Status>>,
@@ -528,6 +555,8 @@ pub async fn data_updater(
     log::info!("Starting global data updater...");
 
     let start_time = Instant::now();
+
+    send_progress(&tx, UpdateStage::Fetching, None).await;
 
     let music_libs = client.music_libraries().await?;
     if music_libs.is_empty() {
@@ -570,11 +599,13 @@ pub async fn data_updater(
         tx_db.commit().await?;
     }
 
+    send_progress(&tx, UpdateStage::Artists, Some(0.0)).await;
     let mut tx_db = pool.begin().await?;
 
     for (i, artist) in artists.iter().enumerate() {
         if i != 0 && i % batch_size == 0 {
             tokio::task::yield_now().await;
+            send_progress(&tx, UpdateStage::Artists, Some(i as f32 / artists.len() as f32)).await;
         }
 
         let artist_json = serde_json::to_string(&artist)?;
@@ -603,12 +634,25 @@ pub async fn data_updater(
     let artist_ids: Vec<String> = artists.iter().map(|a| a.id.clone()).collect();
     let remote_json = serde_json::to_string(&artist_ids)?;
 
+    send_progress(&tx, UpdateStage::Albums, None).await;
     let mut tx_db = pool.begin().await?;
     let mut remote_album_ids: Vec<String> = vec![];
+    let lib_count = music_libs.len().max(1) as f32;
 
-    for lib in &music_libs {
+    for (lib_idx, lib) in music_libs.iter().enumerate() {
         log::info!("Fetching albums for library '{}' (id={})", lib.name, lib.id);
-        let albums = match client.albums(Some(&lib.id)).await {
+        // progress moves as pages stream in — spread each library across the bar
+        let on_page = |fetched: usize, total: usize| {
+            if let Some(tx) = &tx {
+                let within = if total == 0 { 0.0 } else { fetched as f32 / total as f32 };
+                let frac = (lib_idx as f32 + within) / lib_count;
+                let _ = tx.try_send(Status::UpdateProgress {
+                    stage: UpdateStage::Albums,
+                    progress: Some(frac),
+                });
+            }
+        };
+        let albums = match client.albums(Some(&lib.id), on_page).await {
             Ok(albums) => {
                 log::info!(
                     "Fetched {} albums for library '{}' (id={})",
@@ -744,11 +788,14 @@ pub async fn data_updater(
         log::warn!("skipping album deletion pass: album list incomplete (some libraries failed).");
     }
 
+    send_progress(&tx, UpdateStage::Playlists, Some(0.0)).await;
     let mut tx_db = pool.begin().await?;
 
     for (i, playlist) in playlists.iter().enumerate() {
         if i != 0 && i % batch_size == 0 {
             tokio::task::yield_now().await;
+            send_progress(&tx, UpdateStage::Playlists, Some(i as f32 / playlists.len() as f32))
+                .await;
         }
 
         let playlist_json = serde_json::to_string(&playlist)?;

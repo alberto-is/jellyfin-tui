@@ -15,7 +15,7 @@ use crate::client::{
 use crate::config::LyricsVisibility;
 use crate::database;
 use crate::database::database::{
-    Command, DownloadCommand, DownloadItem, JellyfinCommand, Status, UpdateCommand,
+    Command, DownloadCommand, DownloadItem, JellyfinCommand, Status, UpdateCommand, UpdateStage,
 };
 use crate::database::extension::{
     get_album_tracks, get_albums_with_tracks, get_all_albums, get_all_artists, get_all_playlists,
@@ -197,6 +197,7 @@ pub struct App {
     pub dirty: bool,       // dirty flag for rendering
     pub dirty_clear: bool, // dirty flag for clearing the screen
     pub db_updating: bool, // flag to show if db is processing data
+    pub update_progress: Option<(UpdateStage, Option<f32>)>, // updater phase + fraction
     pub transcoding: Transcoding,
 
     pub state: State,             // main persistent state
@@ -491,6 +492,7 @@ impl App {
             dirty: true,
             dirty_clear: false,
             db_updating: false,
+            update_progress: None,
             transcoding: Transcoding {
                 enabled: preferences.transcoding,
                 bitrate: config["transcoding"]["bitrate"]
@@ -2108,8 +2110,15 @@ impl App {
             );
         }
 
-        let updating = format!("{} Updating", &self.spinner_stages[self.spinner],);
         if self.db_updating {
+            let text = match &self.update_progress {
+                None | Some((UpdateStage::Fetching, _)) => "Sync starting".to_string(),
+                Some((stage, progress)) => match progress {
+                    Some(p) => format!("Sync {} {:.0}%", stage.label(), p * 100.0),
+                    None => format!("Sync {}", stage.label()),
+                },
+            };
+            let updating = format!("{} {}", &self.spinner_stages[self.spinner], text);
             status_bar.push(Span::raw(updating).fg(self.theme.primary_color));
         }
 

@@ -294,6 +294,10 @@ impl tui::App {
             }
             Status::UpdateStarted => {
                 self.db_updating = true;
+                self.update_progress = None;
+            }
+            Status::UpdateProgress { stage, progress } => {
+                self.update_progress = Some((stage, progress));
             }
             Status::UpdateFinished => {
                 if self.client.is_none() {
@@ -306,6 +310,7 @@ impl tui::App {
                     self.reorder_lists();
                 }
                 self.db_updating = false;
+                self.update_progress = None;
             }
             Status::UpdateFailed { error } => {
                 self.state.last_section = self.state.active_section;
@@ -315,6 +320,7 @@ impl tui::App {
                     &error,
                 );
                 self.db_updating = false;
+                self.update_progress = None;
             }
             Status::Error { error } => {
                 self.state.last_section = self.state.active_section;

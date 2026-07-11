@@ -565,7 +565,13 @@ impl Client {
 
     /// Produces a list of all albums.
     /// Skips corrupted pages
-    pub async fn albums(&self, library_id: Option<&String>) -> Result<Vec<Album>, reqwest::Error> {
+    /// `on_page(fetched_so_far, total)` is called after each page so callers can
+    /// report fetch progress. Since that is the slow part of the update process
+    pub async fn albums(
+        &self,
+        library_id: Option<&String>,
+        mut on_page: impl FnMut(usize, usize),
+    ) -> Result<Vec<Album>, reqwest::Error> {
         const LIMITS: &[usize] = &[200, 50, 10, 1];
 
         let mut all_albums = Vec::new();
@@ -614,6 +620,7 @@ impl Client {
 
                         all_albums.extend(parsed.items);
                         start_index += count;
+                        on_page(all_albums.len(), total);
 
                         success = true;
 
