@@ -312,6 +312,10 @@ pub struct App {
     pub receiver: Receiver<MpvPlaybackState>,
     // and to avoid a jumpy tui we throttle this update to fast changing values
     pub last_meta_update: Instant,
+    // wall-clock instant at which `current_playback_state.position` last changed.
+    // mpv only pushes a fresh position roughly once per second, so we interpolate
+    // from this timestamp to get an accurate sub-second position for lyric timing.
+    pub position_updated_at: Instant,
     pub recent_input_activity: Instant,
     last_state_saved: Instant,
     scrobble_this: (String, u64), // an id of the previous song we want to scrobble when it ends, and the position in jellyfin ticks
@@ -618,6 +622,7 @@ impl App {
 
             receiver,
             last_meta_update: Instant::now(),
+            position_updated_at: Instant::now(),
             recent_input_activity: Instant::now(),
             last_state_saved: Instant::now(),
 
@@ -1311,11 +1316,15 @@ impl App {
 
     async fn update_playback_state(&mut self, state: &MpvPlaybackState) {
         self.dirty = true;
-        let playback = &mut self.state.current_playback_state;
 
-        let old_position = playback.position;
+        let old_position = self.state.current_playback_state.position;
         let new_position = state.position;
 
+        if (new_position - old_position).abs() > f64::EPSILON {
+            self.position_updated_at = Instant::now();
+        }
+
+        let playback = &mut self.state.current_playback_state;
         playback.position = new_position;
         playback.current_index = state.current_index;
         playback.duration = state.duration;
@@ -1341,6 +1350,11 @@ impl App {
         }
 
         self.buffering = state.buffering;
+
+        // lyrics positioning guard if paused to not add the whole duration at once
+        if self.paused || self.buffering {
+            self.position_updated_at = Instant::now();
+        }
 
         playback.seek_active = state.seek_active;
         // end of queue reached or mpv stopped internally
@@ -1465,10 +1479,15 @@ impl App {
             if !*time_synced {
                 return None;
             }
-            const LYRIC_EARLY_OFFSET_US: u64 = 2_500_000; // this is to show the lyric a bit earlier for better timing
-            let current_time = self.state.current_playback_state.position;
-            let current_time_us = (current_time * 10_000_000.0) as u64;
-            let effective_time = current_time_us.saturating_add(LYRIC_EARLY_OFFSET_US);
+            const LYRIC_EARLY_OFFSET_S: f64 = 0.25;
+
+            let mut current_time = self.state.current_playback_state.position;
+            if !self.paused && !self.buffering {
+                current_time += self.position_updated_at.elapsed().as_secs_f64();
+            }
+
+            let effective_time =
+                ((current_time + LYRIC_EARLY_OFFSET_S).max(0.0) * 10_000_000.0) as u64;
             for (i, lyric) in lyrics.iter().enumerate() {
                 if lyric.start >= effective_time {
                     let index = if i == 0 { 0 } else { i - 1 };
