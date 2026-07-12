@@ -275,6 +275,12 @@ pub struct App {
     pub playlist_load: AsyncLoad,
     // debounced background refresh: (artist_id, queued_at)
     pub pending_discography_update: Option<(String, Instant)>,
+    // debounced network fetch for uncached lists: only actually spawned once settled
+    // here for a moment, so rapid opens (e.g. fast auto_browse scrolling) can't fire a
+    // burst of requests the server ends up processing even if we cancel them client-side
+    pub pending_discography_fetch: Option<(String, u64, Instant)>,
+    pub pending_album_fetch: Option<(String, u64, Instant)>,
+    pub pending_playlist_fetch: Option<((String, Option<usize>), u64, Instant)>,
 
     // open the selected item automatically once it's rested for this long
     pub auto_browse: Option<Duration>,
@@ -604,6 +610,9 @@ impl App {
             album_load: AsyncLoad::default(),
             playlist_load: AsyncLoad::default(),
             pending_discography_update: None,
+            pending_discography_fetch: None,
+            pending_album_fetch: None,
+            pending_playlist_fetch: None,
             // `true` => default 0.6s delay, a number => that many seconds (0 = instant),
             // false/omitted/negative => disabled
             auto_browse: config.get("auto_browse").and_then(|v| {
@@ -1213,7 +1222,7 @@ impl App {
             .unwrap_or_default();
 
         self.report_progress_if_needed().await?;
-        self.flush_discography_update().await;
+        self.flush_debounced_requests().await;
         self.handle_auto_browse().await;
         self.handle_lyrics_scroll().await;
         self.handle_scrobble(&current_song).await?;
@@ -2311,20 +2320,41 @@ impl App {
         self.dirty = true;
     }
 
-    /// Queue a background discography refresh, debounced so scrolling through
-    /// artists only refreshes the one you land on.
+    // debounced discography refresh, so scrolling through artists doesn't spam updates
     pub fn queue_discography_update(&mut self, artist_id: String) {
         self.pending_discography_update = Some((artist_id, Instant::now()));
     }
 
-    /// Send the queued refresh once it's sat untouched for the debounce window.
-    async fn flush_discography_update(&mut self) {
-        const DEBOUNCE: Duration = Duration::from_millis(750);
-        let ready = self
+    // how long a queued refresh waits before we actually send it
+    const UPDATE_DEBOUNCE: Duration = Duration::from_millis(750);
+
+    // how long an uncached open has to settle before we hit the network for it.
+    // stops fast scrolling (auto_browse) from spamming jellyfin with requests
+    const FETCH_DEBOUNCE: Duration = Duration::from_millis(200);
+
+    // pops the payload if it's settled and still current, clears it if stale
+    fn take_ready_fetch<T>(
+        pending: &mut Option<(T, u64, Instant)>,
+        current_generation: u64,
+    ) -> Option<T> {
+        let (_, generation, queued_at) = pending.as_ref()?;
+        if *generation != current_generation {
+            *pending = None; // superseded by a newer request
+            return None;
+        }
+        if queued_at.elapsed() < Self::FETCH_DEBOUNCE {
+            return None;
+        }
+        pending.take().map(|(payload, ..)| payload)
+    }
+
+    // runs every tick, sends off whatever's finished debouncing
+    async fn flush_debounced_requests(&mut self) {
+        if self
             .pending_discography_update
             .as_ref()
-            .is_some_and(|(_, queued_at)| queued_at.elapsed() >= DEBOUNCE);
-        if ready {
+            .is_some_and(|(_, queued_at)| queued_at.elapsed() >= Self::UPDATE_DEBOUNCE)
+        {
             if let Some((artist_id, _)) = self.pending_discography_update.take() {
                 let _ = self
                     .db
@@ -2334,13 +2364,56 @@ impl App {
                     .log_dbg("queue discography update");
             }
         }
+
+        if let Some(artist_id) = Self::take_ready_fetch(
+            &mut self.pending_discography_fetch,
+            self.discography_load.generation,
+        ) {
+            if let Some(client) = self.client.clone() {
+                let tx = self.db.status_tx.clone();
+                let generation = self.discography_load.generation;
+                self.discography_load.task = Some(tokio::spawn(async move {
+                    let tracks = client.discography(&artist_id).await.ok();
+                    let _ =
+                        tx.send(Status::DiscographyFetched { generation, artist_id, tracks }).await;
+                }));
+            }
+        }
+
+        if let Some(album_id) =
+            Self::take_ready_fetch(&mut self.pending_album_fetch, self.album_load.generation)
+        {
+            if let Some(client) = self.client.clone() {
+                let tx = self.db.status_tx.clone();
+                let generation = self.album_load.generation;
+                self.album_load.task = Some(tokio::spawn(async move {
+                    let tracks = client.album_tracks(&album_id).await.ok();
+                    let _ = tx.send(Status::AlbumTracksFetched { generation, tracks }).await;
+                }));
+            }
+        }
+
+        if let Some((playlist_id, limit)) =
+            Self::take_ready_fetch(&mut self.pending_playlist_fetch, self.playlist_load.generation)
+        {
+            if let Some(client) = self.client.clone() {
+                let tx = self.db.status_tx.clone();
+                let generation = self.playlist_load.generation;
+                self.playlist_load.task = Some(tokio::spawn(async move {
+                    let result = client.playlist(&playlist_id, limit).await.ok().map(|d| {
+                        let incomplete = d.items.len() != d.total_record_count as usize;
+                        (d.items, incomplete)
+                    });
+                    let _ = tx.send(Status::PlaylistFetched { generation, result }).await;
+                }));
+            }
+        }
     }
 
-    /// Fetch the discography of an artist. Switches the active section to tracks.
+    // fetches the discography of an artist, switches active section to tracks
     pub async fn discography(&mut self, id: &str) {
-        // already open (or loading)? just take focus — the DB may not have cached the
-        // last fetch yet, so refetching would miss and hit the network again. an empty,
-        // non-loading state falls through so a failed fetch can be retried.
+        // already open or loading? just take focus, don't refetch (DB might not have
+        // cached the last fetch yet). a failed fetch leaves this empty so it can retry
         if !id.is_empty()
             && id == self.state.current_artist.id
             && (!self.tracks.is_empty() || self.discography_load.loading)
@@ -2371,20 +2444,13 @@ impl App {
                     self.queue_discography_update(id.to_string());
                 }
             }
-            // DB empty or errored — fetch online in the background, applied later
-            // in handle_database_status
+            // db empty or errored, fetch queued for flush_debounced_requests
             _ => {
-                if let Some(client) = self.client.clone() {
+                if self.client.is_some() {
                     self.discography_load.loading = true;
                     self.state.active_section = ActiveSection::Tracks;
-                    let tx = self.db.status_tx.clone();
-                    let artist_id = id.to_string();
-                    self.discography_load.task = Some(tokio::spawn(async move {
-                        let tracks = client.discography(&artist_id).await.ok();
-                        let _ = tx
-                            .send(Status::DiscographyFetched { generation, artist_id, tracks })
-                            .await;
-                    }));
+                    self.pending_discography_fetch =
+                        Some((id.to_string(), generation, Instant::now()));
                 } else {
                     // a catch-all for db errors
                     let _ = self
@@ -2427,16 +2493,12 @@ impl App {
                 self.state.active_section = ActiveSection::Tracks;
                 self.album_tracks = tracks;
             }
+            // fetch queued for flush_debounced_requests
             _ => {
-                if let Some(client) = self.client.clone() {
+                if self.client.is_some() {
                     self.album_load.loading = true;
                     self.state.active_section = ActiveSection::Tracks;
-                    let tx = self.db.status_tx.clone();
-                    let album_id = album.id.clone();
-                    self.album_load.task = Some(tokio::spawn(async move {
-                        let tracks = client.album_tracks(&album_id).await.ok();
-                        let _ = tx.send(Status::AlbumTracksFetched { generation, tracks }).await;
-                    }));
+                    self.pending_album_fetch = Some((album.id.clone(), generation, Instant::now()));
                 } else {
                     let _ = self
                         .db
@@ -2494,20 +2556,13 @@ impl App {
                 self.state.active_section = ActiveSection::Tracks;
                 self.playlist_tracks = tracks;
             }
+            // fetch queued for flush_debounced_requests
             _ => {
-                if let Some(client) = self.client.clone() {
+                if self.client.is_some() {
                     self.playlist_load.loading = true;
                     self.state.active_section = ActiveSection::Tracks;
-                    let tx = self.db.status_tx.clone();
-                    let playlist_id = playlist.id.clone();
-                    self.playlist_load.task = Some(tokio::spawn(async move {
-                        // carry the "incomplete" flag (fetched fewer than the total)
-                        let result = client.playlist(&playlist_id, limit).await.ok().map(|d| {
-                            let incomplete = d.items.len() != d.total_record_count as usize;
-                            (d.items, incomplete)
-                        });
-                        let _ = tx.send(Status::PlaylistFetched { generation, result }).await;
-                    }));
+                    self.pending_playlist_fetch =
+                        Some(((playlist.id.clone(), limit), generation, Instant::now()));
                 } else {
                     let _ = self
                         .db

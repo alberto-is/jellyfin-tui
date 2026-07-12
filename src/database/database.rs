@@ -1538,6 +1538,26 @@ fn prune_update_queue(queue: &mut VecDeque<UpdateCommand>) {
         _ => true,
     });
 
+    // same cap for playlists — rapidly opening many playlists (e.g. auto_browse)
+    // shouldn't queue an unbounded tail of refresh requests
+    let mut seen_playlists = Vec::new();
+    let mut playlist_count = 0;
+
+    queue.retain(|cmd| match cmd {
+        UpdateCommand::Playlist { playlist_id } => {
+            if seen_playlists.contains(playlist_id) {
+                return false;
+            }
+            playlist_count += 1;
+            if playlist_count > 3 {
+                return false;
+            }
+            seen_playlists.push(playlist_id.clone());
+            true
+        }
+        _ => true,
+    });
+
     let mut seen_library = false;
     queue.retain(|cmd| match cmd {
         UpdateCommand::Library => {
