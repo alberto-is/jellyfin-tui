@@ -694,34 +694,85 @@ impl Client {
 
     /// Produces a list of songs by an artist sorted by album and index
     ///
+    /// Paginated (like `albums`) since large discographies (thousands of tracks with
+    /// full metadata) can take a horribly long time (thank you jellyfin) to serialize/transfer
     pub async fn discography(&self, id: &str) -> Result<Vec<DiscographySong>, reqwest::Error> {
+        const LIMITS: &[usize] = &[200, 50, 10, 1];
+
         let url = format!("{}/Users/{}/Items", self.base_url, self.user_id);
 
-        let req = self
-            .http_client
-            .get(&url)
-            .header(self.authorization_header.0.as_str(), self.authorization_header.1.as_str())
-            .header("Content-Type", "application/json")
-            .query(&[
-                ("Recursive", "true"),
-                ("IncludeItemTypes", "Audio"),
-                ("Fields", "Genres, DateCreated, MediaSources, ParentId, ProviderIds"),
-                ("ImageTypeLimit", "1"),
-                ("ArtistIds", id),
-                ("StartIndex", "0"),
-            ]);
+        let mut all_items = Vec::new();
+        let mut start_index = 0;
+        let mut total_expected: Option<usize> = None;
 
-        let discog: Discography = match self.get_json_with_retry(req).await {
-            Ok(d) => d,
-            Err(e) => {
-                log::error!("Failed to fetch discography for artist {}: {}", id, e);
-                return Ok(vec![]);
+        while total_expected.map_or(true, |t| start_index < t) {
+            let mut success = false;
+
+            for &limit in LIMITS {
+                let req = self
+                    .http_client
+                    .get(&url)
+                    .header(
+                        self.authorization_header.0.as_str(),
+                        self.authorization_header.1.as_str(),
+                    )
+                    .header("Content-Type", "application/json")
+                    .query(&[
+                        ("Recursive", "true"),
+                        ("IncludeItemTypes", "Audio"),
+                        ("Fields", "Genres, DateCreated, MediaSources, ParentId, ProviderIds"),
+                        ("ImageTypeLimit", "1"),
+                        ("ArtistIds", id),
+                        ("StartIndex", &start_index.to_string()),
+                        ("Limit", &limit.to_string()),
+                    ]);
+
+                match self.get_json_with_retry::<Discography>(req).await {
+                    Ok(page) => {
+                        let count = page.items.len();
+                        let total = page.total_record_count as usize;
+
+                        total_expected.get_or_insert(total);
+
+                        if count == 0 {
+                            return Ok(all_items);
+                        }
+
+                        all_items.extend(page.items);
+                        start_index += count;
+                        success = true;
+
+                        break;
+                    }
+
+                    Err(e) => {
+                        log::warn!(
+                            "Failed to fetch discography for artist {} at StartIndex={} Limit={}, retrying smaller page: {}",
+                            id,
+                            start_index,
+                            limit,
+                            e
+                        );
+
+                        continue;
+                    }
+                }
             }
-        };
 
-        log::debug!("Loaded {} tracks for artist {}", discog.items.len(), id);
+            if !success {
+                log::error!(
+                    "Skipping single track at StartIndex={} for artist {} due to repeated failures",
+                    start_index,
+                    id
+                );
 
-        Ok(discog.items)
+                start_index += 1;
+            }
+        }
+
+        log::debug!("Loaded {} tracks for artist {}", all_items.len(), id);
+
+        Ok(all_items)
     }
 
     /// This gets tracks by their IDS, this is used for remote control, jellyfin sends ids to play and we need to get the track info to play it
