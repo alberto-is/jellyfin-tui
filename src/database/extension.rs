@@ -242,6 +242,7 @@ impl tui::App {
                         self.tracks.len() as i32 - 1,
                     )
                         as usize);
+                    self.discography_stale = true;
                     self.queue_discography_update(artist_id);
                 }
             }
