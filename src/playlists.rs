@@ -365,21 +365,32 @@ impl App {
         widths.push(Constraint::Length(2)); // scrollbar compensation
 
         if self.playlist_tracks.is_empty() {
-            let message_paragraph = Paragraph::new(if self.state.current_playlist.id.is_empty() {
-                "jellyfin-tui".to_string()
+            // show a spinner while the playlist is being fetched
+            let (body, title) = if self.playlist_load.loading {
+                (
+                    format!("{} Fetching playlist", &self.spinner_stages[self.spinner]),
+                    if self.state.current_playlist.name.is_empty() {
+                        "Tracks".to_string()
+                    } else {
+                        self.state.current_playlist.name.clone()
+                    },
+                )
+            } else if self.state.current_playlist.id.is_empty() {
+                ("jellyfin-tui".to_string(), "Tracks".to_string())
             } else {
-                "No tracks in the current playlist".to_string()
-            })
-            .fg(self.theme.resolve(&self.theme.foreground))
-            .block(
-                track_block
-                    .title(Line::from("Tracks").fg(tracks_title_color).left_aligned())
-                    .fg(self.theme.resolve(&self.theme.foreground))
-                    .padding(Padding::new(0, 0, center[0].height / 2, 0))
-                    .title_bottom(track_instructions.alignment(Alignment::Center)),
-            )
-            .wrap(Wrap { trim: false })
-            .alignment(Alignment::Center);
+                ("No tracks in the current playlist".to_string(), "Tracks".to_string())
+            };
+            let message_paragraph = Paragraph::new(body)
+                .fg(self.theme.resolve(&self.theme.foreground))
+                .block(
+                    track_block
+                        .title(Line::from(title).fg(tracks_title_color).left_aligned())
+                        .fg(self.theme.resolve(&self.theme.foreground))
+                        .padding(Padding::new(0, 0, center[0].height / 2, 0))
+                        .title_bottom(track_instructions.alignment(Alignment::Center)),
+                )
+                .wrap(Wrap { trim: false })
+                .alignment(Alignment::Center);
             frame.render_widget(message_paragraph, center[0]);
         } else {
             let items_len = items.len();

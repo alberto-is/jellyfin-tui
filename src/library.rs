@@ -250,9 +250,7 @@ impl App {
         }
         .border_type(self.border_type);
 
-        let selected_artist = self.get_id_of_selected(&self.artists, Selectable::Artist);
-
-        let mut artist_highlight_style = match self.state.active_section {
+        let artist_highlight_style = match self.state.active_section {
             ActiveSection::List => Style::default()
                 .add_modifier(Modifier::BOLD)
                 .bg(self.theme.resolve(&self.theme.selected_active_background))
@@ -262,12 +260,6 @@ impl App {
                 .bg(self.theme.resolve(&self.theme.selected_inactive_background))
                 .fg(self.theme.resolve(&self.theme.selected_inactive_foreground)),
         };
-
-        if let Some(song) = self.state.queue.get(self.state.current_playback_state.current_index) {
-            if song.album_artists.iter().any(|a| a.id == selected_artist) {
-                artist_highlight_style = artist_highlight_style.add_modifier(Modifier::ITALIC);
-            }
-        }
 
         let artists = search_ranked_refs(&self.artists, &self.state.artists_search_term, true);
 
@@ -287,18 +279,23 @@ impl App {
                 {
                     return ListItem::new(Text::raw(""));
                 }
-                let color = if let Some(song) =
-                    self.state.queue.get(self.state.current_playback_state.current_index)
-                {
-                    if song.album_artists.iter().any(|a| a.id == artist.id)
-                        || song.album_artists.iter().any(|a| a.name == artist.name)
-                    {
-                        self.theme.primary_color
-                    } else {
-                        self.theme.resolve(&self.theme.foreground)
-                    }
+                let is_playing = self
+                    .state
+                    .queue
+                    .get(self.state.current_playback_state.current_index)
+                    .is_some_and(|song| {
+                        song.album_artists.iter().any(|a| a.id == artist.id)
+                            || song.album_artists.iter().any(|a| a.name == artist.name)
+                    });
+                let color = if is_playing {
+                    self.theme.primary_color
                 } else {
                     self.theme.resolve(&self.theme.foreground)
+                };
+                let base_style = if is_playing {
+                    Style::default().fg(color).italic()
+                } else {
+                    Style::default().fg(color)
                 };
 
                 // underline the matching search subsequence ranges
@@ -318,25 +315,16 @@ impl App {
                 );
                 for (start, end) in all_subsequences {
                     if last_end < start {
-                        item.push_span(Span::styled(
-                            &artist.name[last_end..start],
-                            Style::default().fg(color),
-                        ));
+                        item.push_span(Span::styled(&artist.name[last_end..start], base_style));
                     }
 
-                    item.push_span(Span::styled(
-                        &artist.name[start..end],
-                        Style::default().fg(color).underlined(),
-                    ));
+                    item.push_span(Span::styled(&artist.name[start..end], base_style.underlined()));
 
                     last_end = end;
                 }
 
                 if last_end < artist.name.len() {
-                    item.push_span(Span::styled(
-                        &artist.name[last_end..],
-                        Style::default().fg(color),
-                    ));
+                    item.push_span(Span::styled(&artist.name[last_end..], base_style));
                 }
 
                 ListItem::new(item)
@@ -412,9 +400,7 @@ impl App {
         }
         .border_type(self.border_type);
 
-        let selected_album = self.get_id_of_selected(&self.albums, Selectable::Album);
-
-        let mut album_highlight_style = match self.state.active_section {
+        let album_highlight_style = match self.state.active_section {
             ActiveSection::List => Style::default()
                 .add_modifier(Modifier::BOLD)
                 .fg(self.theme.resolve(&self.theme.selected_active_foreground))
@@ -424,12 +410,6 @@ impl App {
                 .bg(self.theme.resolve(&self.theme.selected_inactive_background))
                 .fg(self.theme.resolve(&self.theme.selected_inactive_foreground)),
         };
-
-        if let Some(song) = self.state.queue.get(self.state.current_playback_state.current_index) {
-            if song.album_id == selected_album {
-                album_highlight_style = album_highlight_style.add_modifier(Modifier::ITALIC);
-            }
-        }
 
         let albums = search_ranked_refs(&self.albums, &self.state.albums_search_term, true);
 
@@ -448,16 +428,20 @@ impl App {
                     return ListItem::new(Text::raw(""));
                 }
 
-                let color = if let Some(song) =
-                    self.state.queue.get(self.state.current_playback_state.current_index)
-                {
-                    if song.album_id == album.id {
-                        self.theme.primary_color
-                    } else {
-                        self.theme.resolve(&self.theme.foreground)
-                    }
+                let is_playing = self
+                    .state
+                    .queue
+                    .get(self.state.current_playback_state.current_index)
+                    .is_some_and(|song| song.album_id == album.id);
+                let color = if is_playing {
+                    self.theme.primary_color
                 } else {
                     self.theme.resolve(&self.theme.foreground)
+                };
+                let base_style = if is_playing {
+                    Style::default().fg(color).italic()
+                } else {
+                    Style::default().fg(color)
                 };
 
                 // underline the matching search subsequence ranges
@@ -477,25 +461,16 @@ impl App {
                 );
                 for (start, end) in all_subsequences {
                     if last_end < start {
-                        item.push_span(Span::styled(
-                            &album.name[last_end..start],
-                            Style::default().fg(color),
-                        ));
+                        item.push_span(Span::styled(&album.name[last_end..start], base_style));
                     }
 
-                    item.push_span(Span::styled(
-                        &album.name[start..end],
-                        Style::default().fg(color).underlined(),
-                    ));
+                    item.push_span(Span::styled(&album.name[start..end], base_style.underlined()));
 
                     last_end = end;
                 }
 
                 if last_end < album.name.len() {
-                    item.push_span(Span::styled(
-                        &album.name[last_end..],
-                        Style::default().fg(color),
-                    ));
+                    item.push_span(Span::styled(&album.name[last_end..], base_style));
                 }
 
                 item.push_span(Span::styled(
@@ -1189,10 +1164,24 @@ impl App {
         };
 
         if self.tracks.is_empty() {
-            let message_paragraph = Paragraph::new("jellyfin-tui")
+            // show a spinner while the discography is being fetched
+            let (body, title) = if self.discography_load.loading {
+                (
+                    format!("{} Fetching discography", &self.spinner_stages[self.spinner]),
+                    Line::from(if self.state.current_artist.name.is_empty() {
+                        "Tracks".to_string()
+                    } else {
+                        self.state.current_artist.name.clone()
+                    })
+                    .fg(section_title_color),
+                )
+            } else {
+                ("jellyfin-tui".to_string(), Line::from("Tracks").fg(section_title_color))
+            };
+            let message_paragraph = Paragraph::new(body)
                 .block(
                     track_block
-                        .title(Line::from("Tracks").fg(section_title_color))
+                        .title(title)
                         .fg(self.theme.resolve(&self.theme.border))
                         .border_type(self.border_type)
                         .padding(Padding::new(0, 0, center[0].height / 2, 0))
@@ -1462,10 +1451,24 @@ impl App {
         };
 
         if self.album_tracks.is_empty() {
-            let message_paragraph = Paragraph::new("jellyfin-tui")
+            // show a spinner while the album is being fetched
+            let (body, title) = if self.album_load.loading {
+                (
+                    format!("{} Fetching album", &self.spinner_stages[self.spinner]),
+                    Line::from(if self.state.current_album.name.is_empty() {
+                        "Tracks".to_string()
+                    } else {
+                        self.state.current_album.name.clone()
+                    })
+                    .fg(section_title_color),
+                )
+            } else {
+                ("jellyfin-tui".to_string(), Line::from("Tracks").fg(section_title_color))
+            };
+            let message_paragraph = Paragraph::new(body)
                 .block(
                     track_block
-                        .title(Line::from("Tracks").fg(section_title_color))
+                        .title(title)
                         .fg(self.theme.resolve(&self.theme.border))
                         .border_type(self.border_type)
                         .padding(Padding::new(0, 0, center[0].height / 2, 0))
@@ -1843,5 +1846,262 @@ impl App {
                 .style(Style::default().fg(self.theme.resolve(&self.theme.foreground))),
             progress_bar_area[1],
         );
+    }
+
+    pub fn render_zen(&mut self, frame: &mut Frame) {
+        let area = frame.area();
+        let current_song = self.state.queue.get(self.state.current_playback_state.current_index);
+
+        let has_cover = self.cover_art.is_some();
+
+        let has_lyrics =
+            self.lyrics.as_ref().is_some_and(|(_, l, synced)| *synced && !l.is_empty());
+
+        let vertical = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints(if has_lyrics {
+                vec![
+                    Constraint::Percentage(5),
+                    Constraint::Percentage(55),
+                    Constraint::Percentage(25),
+                    Constraint::Percentage(10),
+                    Constraint::Percentage(5),
+                ]
+            } else {
+                vec![
+                    Constraint::Percentage(5),
+                    Constraint::Percentage(65),
+                    Constraint::Percentage(15),
+                    Constraint::Percentage(10),
+                    Constraint::Percentage(5),
+                ]
+            })
+            .split(area);
+
+        let top_bar_area = Rect { height: vertical[0].height.min(1), ..vertical[0] };
+        let top_bar_layout = Layout::default()
+            .direction(Direction::Horizontal)
+            .constraints(vec![
+                Constraint::Percentage(70),
+                Constraint::Percentage(30),
+                Constraint::Min(15),
+            ])
+            .split(top_bar_area);
+        self.render_status_bar(top_bar_layout[1], top_bar_layout[2], frame.buffer_mut(), true);
+
+        let cover_area = vertical[1];
+
+        if has_cover {
+            let margin = 1;
+            let inset = Rect {
+                x: cover_area.x + margin,
+                y: cover_area.y + margin,
+                width: cover_area.width.saturating_sub(margin * 2),
+                height: cover_area.height.saturating_sub(margin * 2),
+            };
+
+            if let Some(cover_art) = self.cover_art.as_mut() {
+                let img_size =
+                    cover_art.size_for(Resize::Scale(None), Size::new(inset.width, inset.height));
+                let centered = Rect {
+                    x: inset.x + (inset.width.saturating_sub(img_size.width)) / 2,
+                    y: inset.y + (inset.height.saturating_sub(img_size.height)) / 2,
+                    width: img_size.width,
+                    height: img_size.height,
+                };
+                let image = StatefulImage::default().resize(Resize::Scale(None));
+                frame.render_stateful_widget(image, centered, cover_art);
+            }
+        }
+
+        let song_info_area = vertical[2];
+
+        let lines: Vec<Line> = match current_song {
+            Some(song) => {
+                let title = Line::from(vec![Span::styled(
+                    &song.name,
+                    Style::default()
+                        .fg(self.theme.resolve(&self.theme.foreground))
+                        .add_modifier(Modifier::BOLD),
+                )])
+                .centered();
+
+                let artists = Line::from(vec![Span::styled(
+                    song.artists.join(", "),
+                    Style::default().fg(self.theme.resolve(&self.theme.foreground_secondary)),
+                )])
+                .centered();
+
+                let album = if song.production_year > 0 {
+                    Line::from(vec![
+                        Span::styled(
+                            &song.album,
+                            Style::default().fg(self.theme.resolve(&self.theme.foreground_dim)),
+                        ),
+                        Span::styled(
+                            format!(" ({})", song.production_year),
+                            Style::default().fg(self.theme.resolve(&self.theme.foreground_dim)),
+                        ),
+                    ])
+                    .centered()
+                } else {
+                    Line::from(vec![Span::styled(
+                        &song.album,
+                        Style::default().fg(self.theme.resolve(&self.theme.foreground_dim)),
+                    )])
+                    .centered()
+                };
+
+                let mut result = vec![title, artists, album];
+
+                if let Some((_, lyrics, time_synced)) = &self.lyrics {
+                    if *time_synced && !lyrics.is_empty() {
+                        result.push(Line::from("").centered());
+
+                        let current_idx = self.state.current_lyric;
+
+                        let start_idx = if current_idx > 0 { current_idx - 1 } else { 0 };
+                        let end_idx = std::cmp::min(start_idx + 3, lyrics.len());
+
+                        for i in start_idx..end_idx {
+                            let lyric = &lyrics[i];
+                            let style = if i == current_idx {
+                                Style::default()
+                                    .fg(self.theme.resolve(&self.theme.foreground))
+                                    .add_modifier(Modifier::BOLD)
+                            } else {
+                                Style::default().fg(self.theme.resolve(&self.theme.foreground_dim))
+                            };
+                            result.push(
+                                Line::from(vec![Span::styled(&lyric.text, style)]).centered(),
+                            );
+                        }
+                    }
+                }
+
+                result
+            }
+            None => vec![Line::from("No track playing")
+                .fg(self.theme.resolve(&self.theme.foreground))
+                .centered()],
+        };
+
+        let content_height = lines.len() as u16;
+        let centered_info = Rect {
+            x: song_info_area.x,
+            y: song_info_area.y + (song_info_area.height.saturating_sub(content_height)) / 2,
+            width: song_info_area.width,
+            height: content_height,
+        };
+        frame.render_widget(
+            Paragraph::new(lines)
+                .style(Style::default().fg(self.theme.resolve(&self.theme.foreground))),
+            centered_info,
+        );
+
+        let progress_area = {
+            let centered = Layout::default()
+                .direction(Direction::Horizontal)
+                .flex(Flex::Center)
+                .constraints(vec![
+                    Constraint::Percentage(10),
+                    Constraint::Percentage(80),
+                    Constraint::Percentage(10),
+                ])
+                .split(vertical[3]);
+            centered[1]
+        };
+
+        let total_seconds = current_song
+            .map(|s| s.run_time_ticks as f64 / 10_000_000.0)
+            .unwrap_or(self.state.current_playback_state.duration);
+
+        let visible_position = if self.state.current_playback_state.seek_active {
+            match self.hard_seek_target {
+                Some(position) => position,
+                _ => self.state.current_playback_state.position,
+            }
+        } else {
+            self.state.current_playback_state.position
+        };
+
+        let percentage =
+            if total_seconds > 0.0 { (visible_position / total_seconds) * 100.0 } else { 0.0 };
+
+        let duration = match total_seconds {
+            0.0 => "0:00 / 0:00".to_string(),
+            _ => {
+                let current_time = self.state.current_playback_state.position;
+                format!(
+                    "{}:{:02} / {}:{:02}",
+                    current_time as u32 / 60,
+                    current_time as u32 % 60,
+                    total_seconds as u32 / 60,
+                    total_seconds as u32 % 60
+                )
+            }
+        };
+
+        let progress_layout = Layout::default()
+            .direction(Direction::Horizontal)
+            .flex(Flex::Center)
+            .constraints(vec![Constraint::Fill(100), Constraint::Min(duration.len() as u16 + 5)])
+            .split(progress_area);
+
+        frame.render_widget(
+            LineGauge::default()
+                .filled_style(if self.buffering {
+                    Style::default().fg(self.theme.primary_color).add_modifier(Modifier::BOLD)
+                } else {
+                    Style::default()
+                        .fg(self.theme.resolve(&self.theme.progress_fill))
+                        .add_modifier(Modifier::BOLD)
+                })
+                .unfilled_style(
+                    Style::default()
+                        .fg(self.theme.resolve(&self.theme.progress_track))
+                        .add_modifier(Modifier::BOLD),
+                )
+                .style(Style::default().fg(self.theme.resolve(&self.theme.foreground)))
+                .ratio(percentage.clamp(0.0, 100.0) / 100.0)
+                .label(Line::from(format!(
+                    "{}   {:.0}% ",
+                    if self.buffering {
+                        self.spinner_stages[self.spinner].clone()
+                    } else if self.paused ^ self.swap_play_pause {
+                        "⏸︎".to_string()
+                    } else {
+                        "►".to_string()
+                    },
+                    percentage,
+                ))),
+            progress_layout[0],
+        );
+
+        frame.render_widget(
+            Paragraph::new(duration)
+                .centered()
+                .style(Style::default().fg(self.theme.resolve(&self.theme.foreground))),
+            progress_layout[1],
+        );
+
+        let hint_area = vertical[4];
+        let hint = Line::from(vec![
+            " Exit ".fg(self.theme.resolve(&self.theme.foreground)),
+            "<Esc>".fg(self.theme.primary_color).bold(),
+            " Play/Pause ".fg(self.theme.resolve(&self.theme.foreground)),
+            "<Space>".fg(self.theme.primary_color).bold(),
+            " Next ".fg(self.theme.resolve(&self.theme.foreground)),
+            "<N>".fg(self.theme.primary_color).bold(),
+            " Prev ".fg(self.theme.resolve(&self.theme.foreground)),
+            "<Shift+N>".fg(self.theme.primary_color).bold(),
+            " Seek ".fg(self.theme.resolve(&self.theme.foreground)),
+            "<← →>".fg(self.theme.primary_color).bold(),
+            " Vol ".fg(self.theme.resolve(&self.theme.foreground)),
+            "<+/->".fg(self.theme.primary_color).bold(),
+        ])
+        .centered();
+
+        frame.render_widget(Paragraph::new(hint), hint_area);
     }
 }

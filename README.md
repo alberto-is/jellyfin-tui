@@ -145,6 +145,15 @@ lyrics: 'always' # options: 'always', 'never', 'auto'
 layout: auto # options: 'auto', 'vertical', 'horizontal'
 vertical_threshold: 100 # columns; only used when layout is 'auto'
 
+# Auto-enter zen mode (see below) after N idle minutes. 0/omitted = disabled.
+zen_mode_timeout_minutes: 0
+
+# Auto-open the selected artist/album/playlist once the selection rests on it, so
+# you can scroll a list without pressing enter. `true` uses a sane default delay;
+# a number sets the delay in seconds (e.g. 0.8), and 0 opens instantly on rest.
+# false/omitted = disabled.
+auto_browse: false
+
 # Swap the play and pause icons
 swap_play_pause: false
 # Custom symbols — useful for Nerd Font users. Each character of `spinner` is one animation frame.
@@ -163,9 +172,10 @@ symbols:
 
 rounded_corners: true
 
+# jellyfin arbitrarily limits the bitrate of transcoded audio to 256kbps, so aac@256 is the best you can do
 transcoding:
-  bitrate: 320
-  # container: mp3
+  bitrate: 256
+  # container: aac
 
 # Discord Rich Presence. Shows your listening status on your Discord profile if Discord is running.
 discord: APPLICATION_ID
@@ -453,7 +463,7 @@ The **Global Popup** includes several toggleable preferences:
 
 | Option                                            | Description                                                                                                                                                                                                   |
 |---------------------------------------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| Synchronize with Jellyfin (runs every 10 minutes) | Manually trigger a library synchronization with the Jellyfin server. This updates the local cache with any changes made on the server, such as new tracks, metadata updates, etc.                             |
+| Synchronize with Jellyfin (runs every 30 minutes) | Manually trigger a library synchronization with the Jellyfin server. This updates the local cache with any changes made on the server, such as new tracks, metadata updates, etc.                             |
 | Run a Jellyfin task                               | Trigger any of the available Jellyfin background tasks, such as `Library: Download missing lyrics` or `Media Analysis`. Very useful for performing maintenance tasks without logging into the web interface.  |
 | Sleep Timer                                       | Fade out and pause after a set amount of time or pause when the current track ends. Great for listening before bed.                                                                                           |
 | Switch to {`large/small`} artwork                 | Toggles the cover art display size                                                                                                                                                                            |
@@ -476,6 +486,14 @@ Press `Alt+Enter` (`PlayAll`) to play the entire discography, album, or playlist
 Learn more about what you can do with the queue by pressing `?` and reading through the key bindings.
 
 ![image](.github/queue.png)
+
+## Zen Mode
+
+Press `Z` for a fullscreen now-playing view — cover art, synced lyrics, progress bar, nothing else. `Esc` or `Z` to
+leave. Playback keys still work.
+
+`zen_mode_timeout_minutes` in `config.yaml` auto-enters it after N minutes idle (fractional ok, e.g. `0.5`). Off by
+default.
 
 ## Global Shuffle
 
