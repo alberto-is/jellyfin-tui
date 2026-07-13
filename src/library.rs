@@ -250,9 +250,7 @@ impl App {
         }
         .border_type(self.border_type);
 
-        let selected_artist = self.get_id_of_selected(&self.artists, Selectable::Artist);
-
-        let mut artist_highlight_style = match self.state.active_section {
+        let artist_highlight_style = match self.state.active_section {
             ActiveSection::List => Style::default()
                 .add_modifier(Modifier::BOLD)
                 .bg(self.theme.resolve(&self.theme.selected_active_background))
@@ -262,12 +260,6 @@ impl App {
                 .bg(self.theme.resolve(&self.theme.selected_inactive_background))
                 .fg(self.theme.resolve(&self.theme.selected_inactive_foreground)),
         };
-
-        if let Some(song) = self.state.queue.get(self.state.current_playback_state.current_index) {
-            if song.album_artists.iter().any(|a| a.id == selected_artist) {
-                artist_highlight_style = artist_highlight_style.add_modifier(Modifier::ITALIC);
-            }
-        }
 
         let artists = search_ranked_refs(&self.artists, &self.state.artists_search_term, true);
 
@@ -287,18 +279,23 @@ impl App {
                 {
                     return ListItem::new(Text::raw(""));
                 }
-                let color = if let Some(song) =
-                    self.state.queue.get(self.state.current_playback_state.current_index)
-                {
-                    if song.album_artists.iter().any(|a| a.id == artist.id)
-                        || song.album_artists.iter().any(|a| a.name == artist.name)
-                    {
-                        self.theme.primary_color
-                    } else {
-                        self.theme.resolve(&self.theme.foreground)
-                    }
+                let is_playing = self
+                    .state
+                    .queue
+                    .get(self.state.current_playback_state.current_index)
+                    .is_some_and(|song| {
+                        song.album_artists.iter().any(|a| a.id == artist.id)
+                            || song.album_artists.iter().any(|a| a.name == artist.name)
+                    });
+                let color = if is_playing {
+                    self.theme.primary_color
                 } else {
                     self.theme.resolve(&self.theme.foreground)
+                };
+                let base_style = if is_playing {
+                    Style::default().fg(color).italic()
+                } else {
+                    Style::default().fg(color)
                 };
 
                 // underline the matching search subsequence ranges
@@ -318,25 +315,16 @@ impl App {
                 );
                 for (start, end) in all_subsequences {
                     if last_end < start {
-                        item.push_span(Span::styled(
-                            &artist.name[last_end..start],
-                            Style::default().fg(color),
-                        ));
+                        item.push_span(Span::styled(&artist.name[last_end..start], base_style));
                     }
 
-                    item.push_span(Span::styled(
-                        &artist.name[start..end],
-                        Style::default().fg(color).underlined(),
-                    ));
+                    item.push_span(Span::styled(&artist.name[start..end], base_style.underlined()));
 
                     last_end = end;
                 }
 
                 if last_end < artist.name.len() {
-                    item.push_span(Span::styled(
-                        &artist.name[last_end..],
-                        Style::default().fg(color),
-                    ));
+                    item.push_span(Span::styled(&artist.name[last_end..], base_style));
                 }
 
                 ListItem::new(item)
@@ -412,9 +400,7 @@ impl App {
         }
         .border_type(self.border_type);
 
-        let selected_album = self.get_id_of_selected(&self.albums, Selectable::Album);
-
-        let mut album_highlight_style = match self.state.active_section {
+        let album_highlight_style = match self.state.active_section {
             ActiveSection::List => Style::default()
                 .add_modifier(Modifier::BOLD)
                 .fg(self.theme.resolve(&self.theme.selected_active_foreground))
@@ -424,12 +410,6 @@ impl App {
                 .bg(self.theme.resolve(&self.theme.selected_inactive_background))
                 .fg(self.theme.resolve(&self.theme.selected_inactive_foreground)),
         };
-
-        if let Some(song) = self.state.queue.get(self.state.current_playback_state.current_index) {
-            if song.album_id == selected_album {
-                album_highlight_style = album_highlight_style.add_modifier(Modifier::ITALIC);
-            }
-        }
 
         let albums = search_ranked_refs(&self.albums, &self.state.albums_search_term, true);
 
@@ -448,16 +428,20 @@ impl App {
                     return ListItem::new(Text::raw(""));
                 }
 
-                let color = if let Some(song) =
-                    self.state.queue.get(self.state.current_playback_state.current_index)
-                {
-                    if song.album_id == album.id {
-                        self.theme.primary_color
-                    } else {
-                        self.theme.resolve(&self.theme.foreground)
-                    }
+                let is_playing = self
+                    .state
+                    .queue
+                    .get(self.state.current_playback_state.current_index)
+                    .is_some_and(|song| song.album_id == album.id);
+                let color = if is_playing {
+                    self.theme.primary_color
                 } else {
                     self.theme.resolve(&self.theme.foreground)
+                };
+                let base_style = if is_playing {
+                    Style::default().fg(color).italic()
+                } else {
+                    Style::default().fg(color)
                 };
 
                 // underline the matching search subsequence ranges
@@ -477,25 +461,16 @@ impl App {
                 );
                 for (start, end) in all_subsequences {
                     if last_end < start {
-                        item.push_span(Span::styled(
-                            &album.name[last_end..start],
-                            Style::default().fg(color),
-                        ));
+                        item.push_span(Span::styled(&album.name[last_end..start], base_style));
                     }
 
-                    item.push_span(Span::styled(
-                        &album.name[start..end],
-                        Style::default().fg(color).underlined(),
-                    ));
+                    item.push_span(Span::styled(&album.name[start..end], base_style.underlined()));
 
                     last_end = end;
                 }
 
                 if last_end < album.name.len() {
-                    item.push_span(Span::styled(
-                        &album.name[last_end..],
-                        Style::default().fg(color),
-                    ));
+                    item.push_span(Span::styled(&album.name[last_end..], base_style));
                 }
 
                 item.push_span(Span::styled(

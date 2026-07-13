@@ -205,7 +205,7 @@ impl Action {
             )),
             Action::Shuffle => Cow::Borrowed("Toggle shuffle"),
             Action::GlobalShuffle => Cow::Borrowed("Global shuffle"),
-            Action::ToggleTranscode => Cow::Borrowed("Toggle transcode"),
+            Action::ToggleTranscode => Cow::Borrowed("Toggle transcoding"),
             Action::Repeat => Cow::Borrowed("Cycle repeat mode"),
             Action::CycleRadio => Cow::Borrowed("Change radio mode (Random, Similar, Continues)"),
             // Input

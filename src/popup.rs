@@ -40,6 +40,29 @@ fn popup_area(area: Rect, percent_x: u16, percent_y: u16) -> Rect {
     popup_area_with_x(area, Constraint::Percentage(percent_x), percent_y)
 }
 
+// the grid size to snap to at a given magnitude: 1min steps below 10, 5min steps
+// below an hour, 15min steps below 2h, 30min steps beyond that
+fn sleep_timer_grid(minutes: u64) -> u64 {
+    match minutes {
+        0..=9 => 1,
+        10..=59 => 5,
+        60..=119 => 15,
+        _ => 30,
+    }
+}
+
+fn step_sleep_timer_minutes(minutes: u64, up: bool) -> u64 {
+    if up {
+        let grid = sleep_timer_grid(minutes);
+        minutes / grid * grid + grid
+    } else if minutes <= 1 {
+        1
+    } else {
+        let grid = sleep_timer_grid(minutes - 1);
+        (minutes - 1) / grid * grid
+    }
+}
+
 /// Like [`popup_area`], but the horizontal constraint is caller-supplied so the
 /// popup can be sized in cells instead of percent (used by vertical mode where
 /// 30% of a narrow terminal would truncate menu labels).
@@ -1325,14 +1348,7 @@ impl crate::tui::App {
                 if let Some(PopupMenu::GlobalSleepTimer { minutes, sleep_timer_enabled }) =
                     &self.popup.current_menu
                 {
-                    let step = if *minutes <= 5 { 1 } else { 5 };
-                    let new_minutes = if *delta > 0 {
-                        minutes + step
-                    } else if *minutes > step {
-                        minutes - step
-                    } else {
-                        1
-                    };
+                    let new_minutes = step_sleep_timer_minutes(*minutes, *delta > 0);
                     self.popup.current_menu = Some(PopupMenu::GlobalSleepTimer {
                         minutes: new_minutes,
                         sleep_timer_enabled: *sleep_timer_enabled,
