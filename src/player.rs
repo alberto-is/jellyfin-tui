@@ -6,6 +6,7 @@ use crate::keyboard::ActiveSection;
 use crate::mpv::SeekFlag;
 use crate::popup::{PopupMenu, ShuffleConfig};
 use crate::tui::{App, RadioMode, Repeat, SleepTimer};
+use media_controls::LoopStatus;
 use std::time::Duration;
 use tokio::time::Instant;
 
@@ -220,12 +221,15 @@ impl App {
     }
 
     pub async fn cycle_repeat_mode(&mut self) {
+        let mut loop_status = LoopStatus::None;
         match self.preferences.repeat {
             Repeat::None => {
                 self.preferences.repeat = Repeat::All;
+                loop_status = LoopStatus::Playlist;
             }
             Repeat::All => {
                 self.preferences.repeat = Repeat::One;
+                loop_status = LoopStatus::Track;
             }
             Repeat::One => {
                 // radio is online-only, if ever added just keep the is_some block
@@ -241,6 +245,10 @@ impl App {
         }
         self.mpv_handle.set_repeat(self.preferences.repeat).await;
         let _ = self.preferences.save().log_err("save preferences");
+
+        if let Some(ref controls) = self.controls {
+            controls.update(media_controls::NowPlaying::new().loop_status(loop_status));
+        }
     }
 
     pub async fn cycle_radio(&mut self) {
@@ -295,6 +303,9 @@ impl App {
                 self.do_shuffle(false).await;
                 self.state.shuffle = true;
             }
+        }
+        if let Some(ref controls) = self.controls {
+            controls.update(media_controls::NowPlaying::new().shuffle(self.state.shuffle));
         }
     }
 
