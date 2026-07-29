@@ -11,7 +11,7 @@ use crate::database::database::{
     UpdateCommand,
 };
 use crate::database::extension::{get_album_tracks, set_selected_libraries, DownloadStatus};
-use crate::helpers::{find_all_subsequences, LogErr, Searchable, Selectable};
+use crate::helpers::{find_all_subsequences, LogErr, Searchable, Selectable, State};
 use crate::keyboard::{search_ranked_indices, search_ranked_refs, Action};
 use crate::themes::theme::Theme;
 use crate::{
@@ -149,6 +149,10 @@ pub enum PopupMenu {
         track: DiscographySong,
         transcoding: bool,
         now_playing_name: Option<String>,
+    },
+    QueueTrackRoot {
+        track_name: String,
+        track_id: String,
     },
     TrackAddToPlaylist {
         track_name: String,
@@ -318,6 +322,7 @@ impl PopupMenu {
             PopupMenu::PlaylistsChangeFilter {} => "Change filter".to_string(),
             // ---------- Tracks ---------- //
             PopupMenu::TrackRoot { track, .. } => track.name.to_string(),
+            PopupMenu::QueueTrackRoot { track_name, .. } => track_name.to_string(),
             PopupMenu::TrackAddToPlaylist { track_name, .. } => track_name.to_string(),
             PopupMenu::TrackAlbumsChangeSort {} => "Change album order".to_string(),
             // ---------- Playlist tracks ---------- //
@@ -836,6 +841,12 @@ impl PopupMenu {
                     true,
                 ),
             ],
+            PopupMenu::QueueTrackRoot { .. } => vec![PopupAction::new(
+                "Add to playlist".to_string(),
+                PopupCommand::AddToPlaylist { playlist_id: String::new() },
+                Style::default(),
+                true,
+            )],
             PopupMenu::TrackAddToPlaylist { playlists, .. } => {
                 let mut actions = vec![];
                 for playlist in playlists {
@@ -1235,6 +1246,25 @@ pub struct PopupState {
     pub global: bool, // if true the popup will be for global commands. Set before calling create_popup
     displayed_options: Vec<PopupAction>,
 }
+
+fn open_queue_track_popup(state: &mut State, popup: &mut PopupState) -> bool {
+    let Some(selected) = state.selected_queue_item.selected() else {
+        return false;
+    };
+    let Some(track) = state.queue.get(selected) else {
+        return false;
+    };
+
+    popup.current_menu = Some(PopupMenu::QueueTrackRoot {
+        track_name: track.name.clone(),
+        track_id: track.id.clone(),
+    });
+    popup.selected.select_first();
+    state.last_section = state.active_section;
+    state.active_section = ActiveSection::Popup;
+    true
+}
+
 impl crate::tui::App {
     /// This function is called when a key is pressed while the popup is open
     ///
@@ -1493,6 +1523,11 @@ impl crate::tui::App {
             return;
         }
 
+        if self.state.last_section == ActiveSection::Queue {
+            self.apply_queue_track_action(&action, menu.clone()).await;
+            return;
+        }
+
         match self.state.active_tab {
             ActiveTab::Library => match self.state.last_section {
                 ActiveSection::Tracks => {
@@ -1529,6 +1564,40 @@ impl crate::tui::App {
 
     /// Following functions separate actions based on UI sections
     ///
+    async fn apply_queue_track_action(
+        &mut self,
+        action: &PopupCommand,
+        menu: PopupMenu,
+    ) -> Option<()> {
+        if matches!(&menu, PopupMenu::TrackAddToPlaylist { .. }) {
+            return self.apply_track_action(action, menu).await;
+        }
+
+        match menu {
+            PopupMenu::QueueTrackRoot { track_name, track_id } => match action {
+                PopupCommand::AddToPlaylist { .. } => {
+                    if self.playlists.is_empty() {
+                        self.set_generic_message(
+                            "No playlists available",
+                            "Create a playlist before adding this track.",
+                        );
+                        return Some(());
+                    }
+                    self.popup.current_menu = Some(PopupMenu::TrackAddToPlaylist {
+                        track_name,
+                        track_id,
+                        playlists: self.playlists.clone(),
+                    });
+                    self.popup.selected.select_first();
+                }
+                _ => self.close_popup(),
+            },
+            _ => self.close_popup(),
+        }
+
+        Some(())
+    }
+
     async fn apply_global_action(&mut self, action: &PopupCommand, menu: PopupMenu) -> Option<()> {
         match menu {
             PopupMenu::GlobalRoot { downloading, sleep_timer_enabled, .. } => match action {
@@ -2037,6 +2106,7 @@ impl crate::tui::App {
                                 track_name, playlist.name
                             ),
                         );
+                        return Some(());
                     }
                     self.playlists
                         .iter_mut()
@@ -3050,8 +3120,14 @@ impl crate::tui::App {
             self.state.active_section = self.state.last_section;
             self.popup.current_menu = None;
         } else {
-            self.state.last_section = self.state.active_section;
-            self.state.active_section = ActiveSection::Popup;
+            if !global && self.state.active_section == ActiveSection::Queue {
+                if self.client.is_some() {
+                    open_queue_track_popup(&mut self.state, &mut self.popup);
+                }
+            } else {
+                self.state.last_section = self.state.active_section;
+                self.state.active_section = ActiveSection::Popup;
+            }
         }
     }
 
@@ -3071,6 +3147,15 @@ impl crate::tui::App {
                     sleep_timer_enabled: self.sleep_timer.is_some(),
                 });
                 self.popup.selected.select_first();
+            }
+            self.render_popup(frame);
+            return Some(());
+        }
+
+        if self.state.last_section == ActiveSection::Queue {
+            if self.popup.current_menu.is_none() {
+                self.close_popup();
+                return None;
             }
             self.render_popup(frame);
             return Some(());
@@ -3297,5 +3382,76 @@ impl crate::tui::App {
         }
 
         Some(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{helpers::State, tui::Song};
+
+    #[test]
+    fn queue_popup_focuses_the_selected_track() {
+        let mut state = State::new();
+        state.active_section = ActiveSection::Queue;
+        state.queue = vec![
+            Song {
+                id: "first-id".to_string(),
+                name: "First track".to_string(),
+                ..Default::default()
+            },
+            Song {
+                id: "selected-id".to_string(),
+                name: "Selected track".to_string(),
+                ..Default::default()
+            },
+        ];
+        state.selected_queue_item.select(Some(1));
+        let mut popup = PopupState::default();
+
+        assert!(open_queue_track_popup(&mut state, &mut popup));
+        assert_eq!(state.last_section, ActiveSection::Queue);
+        assert_eq!(state.active_section, ActiveSection::Popup);
+
+        match popup.current_menu {
+            Some(PopupMenu::QueueTrackRoot { track_name, track_id }) => {
+                assert_eq!(track_name, "Selected track");
+                assert_eq!(track_id, "selected-id");
+            }
+            _ => panic!("expected the selected queue track popup"),
+        }
+    }
+
+    #[test]
+    fn queue_popup_without_a_selection_keeps_queue_focus() {
+        let mut state = State::new();
+        state.active_section = ActiveSection::Queue;
+        state.queue = vec![Song {
+            id: "track-id".to_string(),
+            name: "Track".to_string(),
+            ..Default::default()
+        }];
+        let mut popup = PopupState::default();
+
+        assert!(!open_queue_track_popup(&mut state, &mut popup));
+        assert_eq!(state.active_section, ActiveSection::Queue);
+        assert!(popup.current_menu.is_none());
+    }
+
+    #[test]
+    fn queue_track_popup_offers_add_to_playlist() {
+        let menu = PopupMenu::QueueTrackRoot {
+            track_name: "Track".to_string(),
+            track_id: "track-id".to_string(),
+        };
+
+        let options = menu.options("favorite");
+
+        assert_eq!(options.len(), 1);
+        assert!(matches!(
+            &options[0].action,
+            PopupCommand::AddToPlaylist { playlist_id } if playlist_id.is_empty()
+        ));
+        assert!(options[0].online);
     }
 }
