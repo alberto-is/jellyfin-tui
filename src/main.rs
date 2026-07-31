@@ -127,7 +127,11 @@ async fn main() {
 
     log::info!("jellyfin-tui {} started", version);
 
-    config::initialize_config();
+    tokio::task::spawn_blocking(|| {
+        config::initialize_config();
+    })
+    .await
+    .expect("spawn_blocking for initialize_config panicked");
 
     let mut app = tui::App::new(offline, force_server_select).await;
     if let Err(e) = app.load_state().await {
