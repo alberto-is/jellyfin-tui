@@ -8,11 +8,7 @@ fn queue_popup_focuses_the_selected_track() {
     let mut state = State::new();
     state.active_section = ActiveSection::Queue;
     state.queue = vec![
-        Song {
-            id: "first-id".to_string(),
-            name: "First track".to_string(),
-            ..Default::default()
-        },
+        Song { id: "first-id".to_string(), name: "First track".to_string(), ..Default::default() },
         Song {
             id: "selected-id".to_string(),
             name: "Selected track".to_string(),
@@ -39,11 +35,8 @@ fn queue_popup_focuses_the_selected_track() {
 fn queue_popup_without_a_selection_keeps_queue_focus() {
     let mut state = State::new();
     state.active_section = ActiveSection::Queue;
-    state.queue = vec![Song {
-        id: "track-id".to_string(),
-        name: "Track".to_string(),
-        ..Default::default()
-    }];
+    state.queue =
+        vec![Song { id: "track-id".to_string(), name: "Track".to_string(), ..Default::default() }];
     let mut popup = PopupState::default();
 
     assert!(!open_queue_track_popup(&mut state, &mut popup));
