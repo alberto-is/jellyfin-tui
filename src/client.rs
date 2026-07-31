@@ -530,13 +530,8 @@ impl Client {
                 ("StartIndex", "0"),
             ]);
 
-        let mut artists: Artists = match self.get_json_with_retry(req).await {
-            Ok(a) => a,
-            Err(e) => {
-                log::error!("Failed to fetch artists: {}", e);
-                return Ok(vec![]);
-            }
-        };
+        // Must propagate: an empty list is read as "0 artists" and makes the updater delete them all.
+        let mut artists: Artists = self.get_json_with_retry(req).await?;
 
         // temporary jellyfin bug, doesn't return anything for UserData. Remove once this works!
         let favorite_req = self
@@ -567,16 +562,19 @@ impl Client {
     /// Skips corrupted pages
     /// `on_page(fetched_so_far, total)` is called after each page so callers can
     /// report fetch progress. Since that is the slow part of the update process
+    /// Returns `(albums, complete)`; `complete` is `false` when pages were skipped, so the
+    /// caller must not run deletion passes against a partial list.
     pub async fn albums(
         &self,
         library_id: Option<&String>,
         mut on_page: impl FnMut(usize, usize),
-    ) -> Result<Vec<Album>, reqwest::Error> {
+    ) -> Result<(Vec<Album>, bool), reqwest::Error> {
         const LIMITS: &[usize] = &[200, 50, 10, 1];
 
         let mut all_albums = Vec::new();
         let mut start_index = 0;
         let mut total_expected: Option<usize> = None;
+        let mut complete = true;
 
         while total_expected.map_or(true, |t| start_index < t) {
             let mut success = false;
@@ -615,7 +613,7 @@ impl Client {
                         total_expected.get_or_insert(total);
 
                         if count == 0 {
-                            return Ok(all_albums);
+                            return Ok((all_albums, complete));
                         }
 
                         all_albums.extend(parsed.items);
@@ -646,11 +644,12 @@ impl Client {
                     start_index
                 );
 
+                complete = false;
                 start_index += 1;
             }
         }
 
-        Ok(all_albums)
+        Ok((all_albums, complete))
     }
 
     /// Produces a list of songs in an album
@@ -1123,13 +1122,8 @@ impl Client {
                     ("Limit", &LIMIT.to_string()),
                 ]);
 
-            let parsed: Playlists = match self.get_json_with_retry(req).await {
-                Ok(p) => p,
-                Err(e) => {
-                    log::error!("Failed to fetch playlists at offset {}: {}", start_index, e);
-                    break;
-                }
-            };
+            // Must propagate: a truncated list looks complete to the updater and deletes playlists.
+            let parsed: Playlists = self.get_json_with_retry(req).await?;
 
             let count = parsed.items.len();
 

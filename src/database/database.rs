@@ -653,13 +653,21 @@ pub async fn data_updater(
             }
         };
         let albums = match client.albums(Some(&lib.id), on_page).await {
-            Ok(albums) => {
+            Ok((albums, complete)) => {
                 log::info!(
                     "Fetched {} albums for library '{}' (id={})",
                     albums.len(),
                     lib.name,
                     lib.id
                 );
+                if !complete {
+                    albums_complete = false;
+                    log::warn!(
+                        "album fetch for library '{}' (id={}) incomplete (skipped pages); skipping deletion pass",
+                        lib.name,
+                        lib.id
+                    );
+                }
                 albums
             }
             Err(e) => {
