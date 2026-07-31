@@ -1,9 +1,11 @@
-//! Tests for the parts of the discography pane album folding can break. The row/model mapping and
-//! play-range resolution are pure functions of (tracks, search term, folded albums), so they need
-//! no terminal, server or mpv handle.
+//! Unit tests for logic that's awkward to exercise through the full App/terminal stack, grouped
+//! by the subsystem they cover. discography_view and play_range test the row/model mapping and
+//! play-range resolution of album folding; popup tests the queue track popup. All of it is pure
+//! functions or plain state mutation, so none of it needs a terminal, server or mpv handle.
 
 mod discography_view;
 mod play_range;
+mod popup;
 
 use crate::client::DiscographySong;
 
