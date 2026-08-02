@@ -285,6 +285,20 @@ impl tui::App {
                         );
                 }
             }
+            Status::LyricsFetched { song_id, lyrics } => {
+                if song_id != self.active_song_id {
+                    return;
+                }
+                // don't cache an empty result — a failed fetch would otherwise stick
+                let lyrics = lyrics.unwrap_or_default();
+                if !lyrics.is_empty() {
+                    let _ = insert_lyrics(&self.db.pool, &song_id, &lyrics)
+                        .await
+                        .log_warn("insert lyrics");
+                }
+                self.apply_lyrics(song_id, lyrics);
+                self.fallback_from_lyrics_section();
+            }
             Status::PlaylistUpdated { id } => {
                 if self.state.current_playlist.id == id {
                     if let Ok(tracks) = get_playlist_tracks(

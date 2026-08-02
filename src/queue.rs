@@ -58,6 +58,7 @@ fn make_track(
         is_transcoded: transcoding.enabled
             && !matches!(track.download_status, DownloadStatus::Downloaded),
         is_favorite: track.user_data.is_favorite,
+        has_lyrics: track.has_lyrics,
         original_index: 0,
         run_time_ticks: track.run_time_ticks,
         disliked: track.disliked,

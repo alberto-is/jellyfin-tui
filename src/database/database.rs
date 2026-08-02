@@ -4,7 +4,7 @@ use super::extension::{
 use crate::client::{NetworkQuality, ProgressReport};
 use crate::helpers::LogErr;
 use crate::{
-    client::{Artist, Client, DiscographySong},
+    client::{Artist, Client, DiscographySong, Lyric},
     database::extension::{
         query_download_tracks, remove_track_download, remove_tracks_downloads, DownloadStatus,
     },
@@ -73,6 +73,7 @@ pub enum Status {
     DiscographyFetched { generation: u64, artist_id: String, tracks: Option<Vec<DiscographySong>> },
     AlbumTracksFetched { generation: u64, tracks: Option<Vec<DiscographySong>> },
     PlaylistFetched { generation: u64, result: Option<(Vec<DiscographySong>, bool)> },
+    LyricsFetched { song_id: String, lyrics: Option<Vec<Lyric>> },
     PlaylistUpdated { id: String },
 
     UpdateStarted,

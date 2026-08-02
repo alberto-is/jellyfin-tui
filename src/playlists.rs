@@ -609,12 +609,7 @@ impl App {
             .split(outer_layout[1]);
 
         let has_lyrics = self.lyrics.as_ref().is_some_and(|(_, l, _)| !l.is_empty());
-
-        let show_panel = match self.lyrics_visibility {
-            LyricsVisibility::Auto => has_lyrics,
-            LyricsVisibility::Always => true,
-            LyricsVisibility::Never => false,
-        };
+        let show_panel = self.show_lyrics_panel();
 
         let lyrics_slot_constraints = if show_panel {
             if has_lyrics && !self.lyrics.as_ref().map_or(true, |(_, l, _)| l.len() == 1) {

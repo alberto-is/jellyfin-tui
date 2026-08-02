@@ -52,12 +52,7 @@ impl App {
             .split(outer_layout[1]);
 
         let has_lyrics = self.lyrics.as_ref().is_some_and(|(_, l, _)| !l.is_empty());
-
-        let show_panel = match self.lyrics_visibility {
-            LyricsVisibility::Auto => has_lyrics,
-            LyricsVisibility::Always => true,
-            LyricsVisibility::Never => false,
-        };
+        let show_panel = self.show_lyrics_panel();
 
         let lyrics_slot_constraints = if show_panel {
             if has_lyrics && !self.lyrics.as_ref().map_or(true, |(_, l, _)| l.len() == 1) {
@@ -129,13 +124,7 @@ impl App {
     pub(crate) fn build_vertical_chunks(&self, app_container: Rect) -> std::rc::Rc<[Rect]> {
         let player_height = 8;
         let download_height = if self.download_item.is_some() { 3 } else { 0 };
-        let has_lyrics = self.lyrics.as_ref().is_some_and(|(_, l, _)| !l.is_empty());
-        let show_lyrics_panel = match self.lyrics_visibility {
-            LyricsVisibility::Auto => has_lyrics,
-            LyricsVisibility::Always => true,
-            LyricsVisibility::Never => false,
-        };
-        let lyrics_height = if show_lyrics_panel { 5 } else { 0 };
+        let lyrics_height = if self.show_lyrics_panel() { 5 } else { 0 };
         let (a, b, c) = self.preferences.vertical_pane_ratios;
 
         Layout::default()
@@ -570,7 +559,12 @@ impl App {
             .border_type(self.border_type);
 
             if !has_lyrics {
-                let message_paragraph = Paragraph::new("No lyrics available")
+                let message = if self.current_track_has_lyrics() {
+                    format!("{} Fetching lyrics", &self.spinner_stages[self.spinner])
+                } else {
+                    "No lyrics available".to_string()
+                };
+                let message_paragraph = Paragraph::new(message)
                     .block(
                         lyrics_block
                             .title_alignment(Alignment::Left)

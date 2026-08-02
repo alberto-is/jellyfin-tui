@@ -20,7 +20,7 @@ use crate::database::database::{
 use crate::database::extension::{
     get_album_tracks, get_albums_with_tracks, get_all_albums, get_all_artists, get_all_playlists,
     get_artists_with_tracks, get_discography, get_libraries, get_lyrics, get_playlist_tracks,
-    get_playlists_with_tracks, insert_lyrics,
+    get_playlists_with_tracks,
 };
 use crate::discography::DiscographyView;
 use crate::help::{build_tab_labels, render_help_modal};
@@ -131,6 +131,8 @@ pub struct Song {
     pub is_in_queue: bool,
     pub is_transcoded: bool,
     pub is_favorite: bool,
+    #[serde(default)]
+    pub has_lyrics: bool,
     pub original_index: i64,
     #[serde(default)]
     pub run_time_ticks: u64,
@@ -1804,7 +1806,7 @@ impl App {
         self.active_song_id = song.id.clone();
         self.state.selected_lyric_manual_override = false;
 
-        self.set_lyrics().await?;
+        let lyrics_pending = self.set_lyrics().await?;
         let _ = self
             .db
             .cmd_tx
@@ -1830,15 +1832,9 @@ impl App {
 
         self.update_cover_art(song, false, false).await;
 
-        let has_lyrics = self.lyrics.as_ref().is_some_and(|(_, l, _)| !l.is_empty());
-        if self.state.active_section == ActiveSection::Lyrics && !has_lyrics {
-            let fallback = match self.state.last_section {
-                ActiveSection::Tracks => ActiveSection::Tracks,
-                ActiveSection::List => ActiveSection::List,
-                ActiveSection::Queue => ActiveSection::Queue,
-                _ => ActiveSection::Queue,
-            };
-            self.state.active_section = fallback;
+        // if lyrics are still loading, defer the switch-away until they resolve
+        if !lyrics_pending {
+            self.fallback_from_lyrics_section();
         }
 
         let _ = self.set_window_title(Some(song)).log_dbg("set window title");
@@ -1960,28 +1956,58 @@ impl App {
             self.track_view().track(&self.tracks, row).map(|t| t.id.clone()).unwrap_or_default();
     }
 
-    async fn set_lyrics(&mut self) -> Result<(), Box<dyn std::error::Error>> {
-        if self.active_song_id.is_empty() {
-            return Ok(());
+    /// Loads lyrics for the active song, returning `true` if a background fetch is still
+    /// pending. Cached lyrics resolve synchronously; a miss fetches off-thread so landing on a
+    /// never-played track doesn't block the UI on a network GET (like cover art).
+    async fn set_lyrics(&mut self) -> Result<bool, Box<dyn std::error::Error>> {
+        // a new track is playing: drop the previous lyrics right away
+        self.lyrics = None;
+
+        // nothing to load if lyrics are disabled or this track has none per its metadata
+        if matches!(self.lyrics_visibility, LyricsVisibility::Never)
+            || self.active_song_id.is_empty()
+            || !self.current_track_has_lyrics()
+        {
+            return Ok(false);
+        }
+        let song_id = self.active_song_id.clone();
+
+        if let Ok(lyrics) = get_lyrics(&self.db.pool, &song_id).await {
+            self.apply_lyrics(song_id, lyrics);
+            return Ok(false);
         }
 
-        let maybe_lyrics = if let Some(client) = self.client.as_mut() {
-            client.lyrics(&self.active_song_id).await.ok()
-        } else {
-            None
+        let Some(client) = self.client.clone() else {
+            return Ok(false);
         };
+        let tx = self.db.status_tx.clone();
+        tokio::spawn(async move {
+            let lyrics = client.lyrics(&song_id).await.ok();
+            let _ = tx.send(Status::LyricsFetched { song_id, lyrics }).await;
+        });
+        Ok(true)
+    }
 
-        let lyrics = if let Some(lyrics) = maybe_lyrics {
-            let _ = insert_lyrics(&self.db.pool, &self.active_song_id, &lyrics)
-                .await
-                .log_warn("insert lyrics");
-            lyrics
-        } else {
-            get_lyrics(&self.db.pool, &self.active_song_id).await?
-        };
+    /// Whether the current track is expected to have lyrics, from its metadata.
+    pub fn current_track_has_lyrics(&self) -> bool {
+        self.state
+            .queue
+            .get(self.state.current_playback_state.current_index)
+            .is_some_and(|s| s.has_lyrics)
+    }
 
+    /// Whether the lyrics panel should be shown, given the track's metadata and the preference.
+    pub fn show_lyrics_panel(&self) -> bool {
+        match self.lyrics_visibility {
+            LyricsVisibility::Auto => self.current_track_has_lyrics(),
+            LyricsVisibility::Always => true,
+            LyricsVisibility::Never => false,
+        }
+    }
+
+    pub fn apply_lyrics(&mut self, song_id: String, lyrics: Vec<Lyric>) {
         let time_synced = lyrics.iter().all(|l| l.start != 0);
-        self.lyrics = Some((self.active_song_id.clone(), lyrics, time_synced));
+        self.lyrics = Some((song_id, lyrics, time_synced));
 
         self.state.current_lyric = 0;
 
@@ -1990,8 +2016,19 @@ impl App {
         } else {
             self.state.selected_lyric.select(None);
         }
+    }
 
-        Ok(())
+    pub fn fallback_from_lyrics_section(&mut self) {
+        let has_lyrics = self.lyrics.as_ref().is_some_and(|(_, l, _)| !l.is_empty());
+        if self.state.active_section == ActiveSection::Lyrics && !has_lyrics {
+            let fallback = match self.state.last_section {
+                ActiveSection::Tracks => ActiveSection::Tracks,
+                ActiveSection::List => ActiveSection::List,
+                ActiveSection::Queue => ActiveSection::Queue,
+                _ => ActiveSection::Queue,
+            };
+            self.state.active_section = fallback;
+        }
     }
 
     /// song - the current song
