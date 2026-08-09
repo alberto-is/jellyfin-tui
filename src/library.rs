@@ -913,6 +913,7 @@ impl App {
             .filter(|t| !t.is_album_header())
             .any(|t| (if t.parent_index_number > 0 { t.parent_index_number } else { 1 }) != 1);
         let show_lyrics_column = !matches!(self.lyrics_visibility, LyricsVisibility::Never);
+        let show_album_column = self.show_album_column;
 
         let terminal_height = frame.area().height as usize;
         let selection = self.state.selected_track.selected().unwrap_or(0);
@@ -993,7 +994,9 @@ impl App {
                             String::new()
                         })
                         .style(Style::default().fg(header_fg)),
-                        Cell::from(title_str).column_span(2).fg(header_fg),
+                        Cell::from(title_str)
+                            .column_span(if show_album_column { 2 } else { 1 })
+                            .fg(header_fg),
                     ];
                     if show_disc {
                         cells.push(Cell::from(""));
@@ -1075,8 +1078,11 @@ impl App {
                     } else {
                         Line::from(title)
                     }),
-                    Cell::from(track.album.clone()),
                 ];
+
+                if show_album_column {
+                    cells.push(Cell::from(track.album.clone()));
+                }
 
                 if show_disc {
                     cells.push(Cell::from(if track.parent_index_number > 0 {
@@ -1144,11 +1150,13 @@ impl App {
             "<^C> ".fg(self.theme.primary_color).bold(),
         ]);
 
-        let mut widths: Vec<Constraint> = vec![
-            Constraint::Length(4),
-            Constraint::Percentage(70), // Title
-            Constraint::Percentage(30), // Album
-        ];
+        let mut widths: Vec<Constraint> = vec![Constraint::Length(4)];
+        if show_album_column {
+            widths.push(Constraint::Percentage(70)); // Title
+            widths.push(Constraint::Percentage(30)); // Album
+        } else {
+            widths.push(Constraint::Percentage(100)); // Title
+        }
         if show_disc {
             widths.push(Constraint::Length(1));
         }
@@ -1215,7 +1223,10 @@ impl App {
         let selected_is_album = tracks.get(selection).map_or(false, |t| t.is_album_header());
 
         let mut header_cells: Vec<&str> =
-            vec![if selected_is_album { "Yr." } else { "No." }, "Title", "Album"];
+            vec![if selected_is_album { "Yr." } else { "No." }, "Title"];
+        if show_album_column {
+            header_cells.push("Album");
+        }
         if show_disc {
             header_cells.push(&self.symbols.disc);
         }

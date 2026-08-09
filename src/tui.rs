@@ -246,6 +246,7 @@ pub struct App {
 
     pub lyrics: Option<(String, Vec<Lyric>, bool)>, // ID, lyrics, time_synced
     pub lyrics_visibility: LyricsVisibility,
+    pub show_album_column: bool,
     pub layout_mode: crate::config::LayoutMode,
     pub vertical_threshold: u16,
     pub previous_song_parent_id: String,
@@ -568,6 +569,7 @@ impl App {
                 .and_then(|v| v.as_str())
                 .map(LyricsVisibility::from_config)
                 .unwrap_or(LyricsVisibility::Always),
+            show_album_column: config.get("album_column").and_then(|v| v.as_bool()).unwrap_or(true),
             layout_mode: config
                 .get("layout")
                 .and_then(|v| v.as_str())
@@ -1456,6 +1458,8 @@ impl App {
                     .and_then(|v| v.as_str())
                     .map(LyricsVisibility::from_config)
                     .unwrap_or(LyricsVisibility::Always);
+                self.show_album_column =
+                    new_config.get("album_column").and_then(|v| v.as_bool()).unwrap_or(true);
                 self.layout_mode = new_config
                     .get("layout")
                     .and_then(|v| v.as_str())
