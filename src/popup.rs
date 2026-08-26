@@ -184,6 +184,12 @@ pub enum PopupMenu {
         playlist_name: String,
         playlist_id: String,
     },
+    PlaylistTracksRemoveMany {
+        count: usize,
+        keys: Vec<String>,
+        playlist_name: String,
+        playlist_id: String,
+    },
     /**
      * Artist related popups
      */
@@ -338,6 +344,9 @@ impl PopupMenu {
             PopupMenu::PlaylistTracksRoot { track, .. } => track.name.to_string(),
             PopupMenu::PlaylistTrackAddToPlaylist { track_name, .. } => track_name.to_string(),
             PopupMenu::PlaylistTracksRemove { track_name, .. } => track_name.to_string(),
+            PopupMenu::PlaylistTracksRemoveMany { count, .. } => {
+                format!("Remove {} selected track(s)?", count)
+            }
             // ---------- Artists ---------- //
             PopupMenu::ArtistRoot { artist, .. } => artist.name.to_string(),
             PopupMenu::ArtistJumpToCurrent { artists, .. } => {
@@ -1048,6 +1057,21 @@ impl PopupMenu {
             PopupMenu::PlaylistTracksRemove { track_name, .. } => vec![
                 PopupAction::new(
                     format!("Remove {} from playlist?", track_name),
+                    PopupCommand::None,
+                    Style::default().fg(style::Color::Red),
+                    true,
+                ),
+                PopupAction::new(
+                    "Yes".to_string(),
+                    PopupCommand::Yes,
+                    Style::default().fg(style::Color::Red),
+                    true,
+                ),
+                PopupAction::new("No".to_string(), PopupCommand::No, Style::default(), true),
+            ],
+            PopupMenu::PlaylistTracksRemoveMany { count, .. } => vec![
+                PopupAction::new(
+                    format!("Remove {} selected track(s) from playlist?", count),
                     PopupCommand::None,
                     Style::default().fg(style::Color::Red),
                     true,
@@ -2713,6 +2737,16 @@ impl crate::tui::App {
                         );
                     }
                 }
+                _ => {
+                    self.close_popup();
+                }
+            },
+            PopupMenu::PlaylistTracksRemoveMany { keys, .. } => match action {
+                PopupCommand::Yes => {
+                    self.close_popup();
+                    self.remove_playlist_tracks(keys).await;
+                }
+                // keep the selection intact and stay in select mode
                 _ => {
                     self.close_popup();
                 }

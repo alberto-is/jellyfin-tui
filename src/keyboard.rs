@@ -237,9 +237,7 @@ impl Action {
             Action::Reset => Cow::Borrowed("Reset state"),
             Action::CollapseAlbum => Cow::Borrowed("Fold / unfold selected album"),
             Action::CollapseAllAlbums => Cow::Borrowed("Fold / unfold all albums"),
-            Action::ToggleSelectMode => Cow::Borrowed(
-                "Toggle select mode (space toggles a track, d removes selected, esc exits)",
-            ),
+            Action::ToggleSelectMode => Cow::Borrowed("Toggle playlist select mode"),
         }
     }
 
@@ -596,7 +594,7 @@ impl App {
                 match action {
                     Action::Cancel | Action::ToggleSelectMode => self.exit_playlist_select_mode(),
                     Action::PlayPause | Action::Enter => self.toggle_playlist_selection(),
-                    Action::Download => self.remove_selected_playlist_tracks().await,
+                    Action::Download => self.request_playlist_selection_removal(),
                     // navigation keeps working while selecting
                     Action::Up => self.select_previous(),
                     Action::Down => self.select_next(),
@@ -3247,9 +3245,31 @@ impl App {
         self.dirty = true;
     }
 
-    /// Remove every selected track from the current playlist, then leave select mode.
-    pub async fn remove_selected_playlist_tracks(&mut self) {
+    /// Ask for confirmation before removing every selected track from the current playlist.
+    pub fn request_playlist_selection_removal(&mut self) {
         if !self.playlist_select_mode || self.playlist_selected_items.is_empty() {
+            return;
+        }
+        if self.client.is_none() || self.state.current_playlist.id.is_empty() {
+            return;
+        }
+
+        self.popup.global = false;
+        self.state.last_section = self.state.active_section;
+        self.state.active_section = ActiveSection::Popup;
+        self.popup.current_menu = Some(crate::popup::PopupMenu::PlaylistTracksRemoveMany {
+            count: self.playlist_selected_items.len(),
+            keys: self.playlist_selected_items.iter().cloned().collect(),
+            playlist_name: self.state.current_playlist.name.clone(),
+            playlist_id: self.state.current_playlist.id.clone(),
+        });
+        self.popup.selected.select(Some(1));
+    }
+
+    /// Remove the given tracks (playlist entry ids, or media ids as fallback) from the current
+    /// playlist, then leave select mode.
+    pub async fn remove_playlist_tracks(&mut self, keys: Vec<String>) {
+        if keys.is_empty() {
             return;
         }
 
@@ -3260,16 +3280,15 @@ impl App {
         }
         let playlist_name = self.state.current_playlist.name.clone();
 
-        let selected: Vec<String> = self.playlist_selected_items.iter().cloned().collect();
         let mut removed_ok = 0usize;
-        for key in &selected {
+        for key in &keys {
             if client.remove_from_playlist(key, &playlist_id).await.is_ok() {
                 removed_ok += 1;
             }
         }
 
         if removed_ok > 0 {
-            let selection = &self.playlist_selected_items;
+            let selection: std::collections::HashSet<&String> = keys.iter().collect();
             self.playlist_tracks.retain(|t| {
                 let key = if t.playlist_item_id.is_empty() {
                     t.id.clone()
