@@ -225,6 +225,8 @@ impl App {
                 {
                     return Row::default();
                 }
+                let is_selected = self.playlist_select_mode
+                    && self.playlist_selected_items.contains(&Self::playlist_track_key(track));
                 // track.run_time_ticks is in microseconds
                 let seconds = (track.run_time_ticks / 10_000_000) % 60;
                 let minutes = (track.run_time_ticks / 10_000_000 / 60) % 60;
@@ -270,7 +272,12 @@ impl App {
 
                 let mut cells = vec![
                     // No.
-                    Cell::from(format!("{}.", i + 1)).style(if track.id == self.active_song_id {
+                    Cell::from(if is_selected {
+                        format!("✓{}.", i + 1)
+                    } else {
+                        format!("{}.", i + 1)
+                    })
+                    .style(if track.id == self.active_song_id {
                         Style::default().fg(color)
                     } else {
                         Style::default().fg(Color::DarkGray)
@@ -319,7 +326,11 @@ impl App {
                         .alignment(Alignment::Right),
                 ));
 
-                Row::new(cells).style(if track.id == self.active_song_id {
+                Row::new(cells).style(if is_selected {
+                    Style::default()
+                        .fg(self.theme.primary_color)
+                        .add_modifier(Modifier::BOLD | Modifier::UNDERLINED)
+                } else if track.id == self.active_song_id {
                     Style::default().fg(self.theme.primary_color).italic()
                 } else if track.disliked {
                     Style::default().fg(self.theme.resolve(&self.theme.foreground_dim))
@@ -329,7 +340,38 @@ impl App {
             })
             .collect::<Vec<Row>>();
 
-        let track_instructions = if self.playlist_editing {
+        let track_instructions = if self.playlist_select_mode {
+            Line::from(vec![
+                Span::styled(
+                    format!(" {} selected ", self.playlist_selected_items.len()),
+                    Style::default().fg(self.theme.primary_color).add_modifier(Modifier::BOLD),
+                ),
+                Span::styled(
+                    " Toggle ".to_string(),
+                    Style::default().fg(self.theme.resolve(&self.theme.section_title)),
+                ),
+                Span::styled(
+                    "<space>".to_string(),
+                    Style::default().fg(self.theme.primary_color).add_modifier(Modifier::BOLD),
+                ),
+                Span::styled(
+                    " Remove ".to_string(),
+                    Style::default().fg(self.theme.resolve(&self.theme.section_title)),
+                ),
+                Span::styled(
+                    "<d>".to_string(),
+                    Style::default().fg(self.theme.primary_color).add_modifier(Modifier::BOLD),
+                ),
+                Span::styled(
+                    " Exit ".to_string(),
+                    Style::default().fg(self.theme.resolve(&self.theme.section_title)),
+                ),
+                Span::styled(
+                    "<esc>".to_string(),
+                    Style::default().fg(self.theme.primary_color).add_modifier(Modifier::BOLD),
+                ),
+            ])
+        } else if self.playlist_editing {
             Line::from(vec![
                 " Moving track".fg(self.theme.primary_color).bold(),
                 " Save ".fg(self.theme.resolve(&self.theme.section_title)),
@@ -346,7 +388,11 @@ impl App {
             ])
         };
         let mut widths = vec![
-            Constraint::Length(items.len().to_string().len() as u16 + 2),
+            Constraint::Length(
+                items.len().to_string().len() as u16
+                    + 2
+                    + if self.playlist_select_mode { 1 } else { 0 },
+            ),
             Constraint::Percentage(50), // title and track even width
             Constraint::Percentage(25),
             Constraint::Percentage(25),

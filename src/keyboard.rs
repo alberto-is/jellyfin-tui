@@ -153,6 +153,8 @@ pub enum Action {
     CollapseAlbum,
     /// Fold every album in the discography pane, or unfold them all
     CollapseAllAlbums,
+    /// Toggle select mode in the playlist tracks pane, to remove multiple tracks at once
+    ToggleSelectMode,
 }
 
 impl Action {
@@ -235,6 +237,9 @@ impl Action {
             Action::Reset => Cow::Borrowed("Reset state"),
             Action::CollapseAlbum => Cow::Borrowed("Fold / unfold selected album"),
             Action::CollapseAllAlbums => Cow::Borrowed("Fold / unfold all albums"),
+            Action::ToggleSelectMode => Cow::Borrowed(
+                "Toggle select mode (space toggles a track, d removes selected, esc exits)",
+            ),
         }
     }
 
@@ -294,7 +299,8 @@ impl Action {
             | Action::ShortenPane
             | Action::ZenMode
             | Action::CollapseAlbum
-            | Action::CollapseAllAlbums => ActionCategory::UI,
+            | Action::CollapseAllAlbums
+            | Action::ToggleSelectMode => ActionCategory::UI,
 
             Action::Quit | Action::Shell(_) | Action::Reset => ActionCategory::System,
         }
@@ -401,6 +407,8 @@ const DEFAULT_BINDINGS: &[(KeyCombination, Action)] = &[
     // album folding
     (key!('o'), Action::CollapseAlbum),
     (key!(shift - o), Action::CollapseAllAlbums),
+    // playlist select mode
+    (key!('v'), Action::ToggleSelectMode),
 ];
 
 pub fn try_load_keymap(
@@ -578,6 +586,37 @@ impl App {
             return;
         }
 
+        if self.playlist_select_mode {
+            // leaving the playlist tracks pane automatically exits select mode
+            if self.state.active_tab != ActiveTab::Playlists
+                || self.state.active_section != ActiveSection::Tracks
+            {
+                self.exit_playlist_select_mode();
+            } else {
+                match action {
+                    Action::Cancel | Action::ToggleSelectMode => self.exit_playlist_select_mode(),
+                    Action::PlayPause | Action::Enter => self.toggle_playlist_selection(),
+                    Action::Download => self.remove_selected_playlist_tracks().await,
+                    // navigation keeps working while selecting
+                    Action::Up => self.select_previous(),
+                    Action::Down => self.select_next(),
+                    Action::Jump(lines) => self.jump(*lines),
+                    Action::PageUp => self.page_up(),
+                    Action::PageDown => self.page_down(),
+                    Action::JumpFirst => self.go_first(),
+                    Action::JumpLast => self.go_last(),
+                    Action::JumpForward => self.jump_forward(),
+                    Action::JumpBackward => self.jump_backward(),
+                    Action::Quit => self.exit().await,
+                    Action::Help => self.show_help(),
+                    Action::Popup => self.request_popup(false).await,
+                    Action::GlobalPopup => self.request_popup(true).await,
+                    _ => return,
+                }
+            }
+            return;
+        }
+
         if self.zen_mode {
             match action {
                 Action::Cancel | Action::ZenMode => self.zen_mode = false,
@@ -653,6 +692,7 @@ impl App {
             Action::Reset => self.reset().await,
             Action::CollapseAlbum => self.toggle_collapse_album(),
             Action::CollapseAllAlbums => self.toggle_all_albums_collapse(),
+            Action::ToggleSelectMode => self.toggle_playlist_select_mode(),
             Action::ToggleTranscode => self.toggle_transcoding().await,
             Action::Volume(delta) => self.volume_delta(*delta).await,
             Action::Up => self.select_previous(),
@@ -3075,7 +3115,10 @@ impl App {
     }
 
     fn begin_playlist_edit(&mut self) {
-        if self.playlist_editing || !self.state.playlist_tracks_search_term.is_empty() {
+        if self.playlist_editing
+            || self.playlist_select_mode
+            || !self.state.playlist_tracks_search_term.is_empty()
+        {
             return;
         }
 
@@ -3126,6 +3169,128 @@ impl App {
         self.playlist_editing = false;
         self.playlist_edit_item_id = None;
         self.playlist_edit_origin_index = None;
+    }
+
+    /// Enter or exit playlist select mode, used to remove multiple tracks from a playlist at once.
+    pub fn toggle_playlist_select_mode(&mut self) {
+        if self.playlist_select_mode {
+            self.exit_playlist_select_mode();
+            return;
+        }
+
+        // select mode only makes sense in the playlist tracks pane
+        if self.playlist_editing
+            || self.playlist_incomplete
+            || self.playlist_stale
+            || self.state.active_tab != ActiveTab::Playlists
+            || self.state.active_section != ActiveSection::Tracks
+        {
+            return;
+        }
+
+        self.playlist_select_mode = true;
+
+        // seed the selection with the track under the cursor so `d` alone removes it
+        if self.playlist_selected_items.is_empty() {
+            let key = self.selected_playlist_track().map(Self::playlist_track_key);
+            if let Some(key) = key {
+                if !key.is_empty() {
+                    self.playlist_selected_items.insert(key);
+                }
+            }
+        }
+        self.dirty = true;
+    }
+
+    pub fn exit_playlist_select_mode(&mut self) {
+        if !self.playlist_select_mode {
+            return;
+        }
+        self.playlist_select_mode = false;
+        self.playlist_selected_items.clear();
+        self.dirty = true;
+    }
+
+    /// The track currently under the cursor in the playlist tracks pane, respecting the search
+    /// filter. `None` if there is nothing to select.
+    fn selected_playlist_track(&self) -> Option<&DiscographySong> {
+        let idx = self.state.selected_playlist_track.selected().unwrap_or(0);
+        search_ranked_refs(&self.playlist_tracks, &self.state.playlist_tracks_search_term, true)
+            .get(idx)
+            .copied()
+    }
+
+    /// Stable key for marking a playlist track in select mode. Prefers the playlist entry id, but
+    /// falls back to the media id, matching how single tracks are removed today.
+    pub(crate) fn playlist_track_key(track: &DiscographySong) -> String {
+        if track.playlist_item_id.is_empty() {
+            track.id.clone()
+        } else {
+            track.playlist_item_id.clone()
+        }
+    }
+
+    /// Toggle the track under the cursor in/out of the selection (space / enter in select mode).
+    pub fn toggle_playlist_selection(&mut self) {
+        if !self.playlist_select_mode {
+            return;
+        }
+        let Some(key) = self.selected_playlist_track().map(Self::playlist_track_key) else {
+            return;
+        };
+        if key.is_empty() {
+            return;
+        }
+        if !self.playlist_selected_items.remove(&key) {
+            self.playlist_selected_items.insert(key);
+        }
+        self.dirty = true;
+    }
+
+    /// Remove every selected track from the current playlist, then leave select mode.
+    pub async fn remove_selected_playlist_tracks(&mut self) {
+        if !self.playlist_select_mode || self.playlist_selected_items.is_empty() {
+            return;
+        }
+
+        let Some(client) = self.client.as_ref() else { return };
+        let playlist_id = self.state.current_playlist.id.clone();
+        if playlist_id.is_empty() {
+            return;
+        }
+        let playlist_name = self.state.current_playlist.name.clone();
+
+        let selected: Vec<String> = self.playlist_selected_items.iter().cloned().collect();
+        let mut removed_ok = 0usize;
+        for key in &selected {
+            if client.remove_from_playlist(key, &playlist_id).await.is_ok() {
+                removed_ok += 1;
+            }
+        }
+
+        if removed_ok > 0 {
+            let selection = &self.playlist_selected_items;
+            self.playlist_tracks.retain(|t| {
+                let key = if t.playlist_item_id.is_empty() {
+                    t.id.clone()
+                } else {
+                    t.playlist_item_id.clone()
+                };
+                !selection.contains(&key)
+            });
+            self.playlist_track_select_by_index(0);
+            self.set_generic_message(
+                "Tracks removed",
+                &format!("Removed {} track(s) from {}.", removed_ok, playlist_name),
+            );
+        } else {
+            self.set_generic_message(
+                "Error removing tracks",
+                &format!("Failed to remove selected tracks from {}.", playlist_name),
+            );
+        }
+
+        self.exit_playlist_select_mode();
     }
 
     async fn global_search(&mut self) {
