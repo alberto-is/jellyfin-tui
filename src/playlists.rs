@@ -383,6 +383,8 @@ impl App {
             Line::from(vec![
                 " Help ".fg(self.theme.resolve(&self.theme.section_title)),
                 "<?>".fg(self.theme.primary_color).bold(),
+                " Select ".fg(self.theme.resolve(&self.theme.section_title)),
+                "<v>".fg(self.theme.primary_color).bold(),
                 " Quit ".fg(self.theme.resolve(&self.theme.section_title)),
                 "<^C> ".fg(self.theme.primary_color).bold(),
             ])
