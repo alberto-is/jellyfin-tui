@@ -178,13 +178,9 @@ pub enum PopupMenu {
         track_id: String,
         playlists: Vec<Playlist>,
     },
+    // Confirmation for removing one or many tracks from a playlist; also used when
+    // removing a selection marked with select mode (`v`)
     PlaylistTracksRemove {
-        track_name: String,
-        track_id: String,
-        playlist_name: String,
-        playlist_id: String,
-    },
-    PlaylistTracksRemoveMany {
         count: usize,
         keys: Vec<String>,
         playlist_name: String,
@@ -343,8 +339,7 @@ impl PopupMenu {
             // ---------- Playlist tracks ---------- //
             PopupMenu::PlaylistTracksRoot { track, .. } => track.name.to_string(),
             PopupMenu::PlaylistTrackAddToPlaylist { track_name, .. } => track_name.to_string(),
-            PopupMenu::PlaylistTracksRemove { track_name, .. } => track_name.to_string(),
-            PopupMenu::PlaylistTracksRemoveMany { count, .. } => {
+            PopupMenu::PlaylistTracksRemove { count, .. } => {
                 format!("Remove {} selected track(s)?", count)
             }
             // ---------- Artists ---------- //
@@ -1054,22 +1049,7 @@ impl PopupMenu {
                 }
                 actions
             }
-            PopupMenu::PlaylistTracksRemove { track_name, .. } => vec![
-                PopupAction::new(
-                    format!("Remove {} from playlist?", track_name),
-                    PopupCommand::None,
-                    Style::default().fg(style::Color::Red),
-                    true,
-                ),
-                PopupAction::new(
-                    "Yes".to_string(),
-                    PopupCommand::Yes,
-                    Style::default().fg(style::Color::Red),
-                    true,
-                ),
-                PopupAction::new("No".to_string(), PopupCommand::No, Style::default(), true),
-            ],
-            PopupMenu::PlaylistTracksRemoveMany { count, .. } => vec![
+            PopupMenu::PlaylistTracksRemove { count, .. } => vec![
                 PopupAction::new(
                     format!("Remove {} selected track(s) from playlist?", count),
                     PopupCommand::None,
@@ -2660,8 +2640,8 @@ impl crate::tui::App {
                     }
                     PopupCommand::Delete => {
                         self.popup.current_menu = Some(PopupMenu::PlaylistTracksRemove {
-                            track_name: track.name.clone(),
-                            track_id: track.id.clone(),
+                            count: 1,
+                            keys: vec![Self::playlist_track_key(&track)],
                             playlist_name: self.state.current_playlist.name.clone(),
                             playlist_id: self.state.current_playlist.id.clone(),
                         });
@@ -2705,43 +2685,7 @@ impl crate::tui::App {
                     self.close_popup();
                 }
             }
-            PopupMenu::PlaylistTracksRemove {
-                track_name,
-                track_id,
-                playlist_name,
-                playlist_id,
-            } => match action {
-                PopupCommand::None => {
-                    self.popup.selected.select_next();
-                }
-                PopupCommand::Yes => {
-                    if self
-                        .client
-                        .as_ref()?
-                        .remove_from_playlist(&track_id, &playlist_id)
-                        .await
-                        .is_ok()
-                    {
-                        self.playlist_tracks.retain(|t| t.playlist_item_id != track_id);
-                        self.set_generic_message(
-                            &format!("{} removed", track_name),
-                            &format!("Successfully removed from {}.", playlist_name),
-                        );
-                    } else {
-                        self.set_generic_message(
-                            "Error removing track",
-                            &format!(
-                                "Failed to remove track {} from playlist {}.",
-                                track_name, playlist_name
-                            ),
-                        );
-                    }
-                }
-                _ => {
-                    self.close_popup();
-                }
-            },
-            PopupMenu::PlaylistTracksRemoveMany { keys, .. } => match action {
+            PopupMenu::PlaylistTracksRemove { keys, .. } => match action {
                 PopupCommand::Yes => {
                     self.close_popup();
                     self.remove_playlist_tracks(keys).await;
