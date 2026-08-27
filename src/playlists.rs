@@ -359,7 +359,7 @@ impl App {
                     Style::default().fg(self.theme.resolve(&self.theme.section_title)),
                 ),
                 Span::styled(
-                    "<d>".to_string(),
+                    "<Delete>".to_string(),
                     Style::default().fg(self.theme.primary_color).add_modifier(Modifier::BOLD),
                 ),
                 Span::styled(
@@ -380,14 +380,18 @@ impl App {
                 "<ESC> ".fg(self.theme.primary_color).bold(),
             ])
         } else {
-            Line::from(vec![
+            let mut line = vec![
                 " Help ".fg(self.theme.resolve(&self.theme.section_title)),
                 "<?>".fg(self.theme.primary_color).bold(),
-                " Select ".fg(self.theme.resolve(&self.theme.section_title)),
-                "<v>".fg(self.theme.primary_color).bold(),
-                " Quit ".fg(self.theme.resolve(&self.theme.section_title)),
-                "<^C> ".fg(self.theme.primary_color).bold(),
-            ])
+            ];
+            // removing tracks from playlists is not possible while offline
+            if self.client.is_some() {
+                line.push(" Select ".fg(self.theme.resolve(&self.theme.section_title)));
+                line.push("<v>".fg(self.theme.primary_color).bold());
+            }
+            line.push(" Quit ".fg(self.theme.resolve(&self.theme.section_title)));
+            line.push("<^C> ".fg(self.theme.primary_color).bold());
+            Line::from(line)
         };
         let mut widths = vec![
             Constraint::Length(

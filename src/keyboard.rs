@@ -594,7 +594,7 @@ impl App {
                 match action {
                     Action::Cancel | Action::ToggleSelectMode => self.exit_playlist_select_mode(),
                     Action::PlayPause | Action::Enter => self.toggle_playlist_selection(),
-                    Action::Download => self.request_playlist_selection_removal(),
+                    Action::Delete => self.request_playlist_selection_removal(),
                     // navigation keeps working while selecting
                     Action::Up => self.select_previous(),
                     Action::Down => self.select_next(),
@@ -3177,7 +3177,8 @@ impl App {
         }
 
         // select mode only makes sense in the playlist tracks pane
-        if self.playlist_editing
+        if self.client.is_none()
+            || self.playlist_editing
             || self.playlist_incomplete
             || self.playlist_stale
             || self.state.active_tab != ActiveTab::Playlists
@@ -3188,7 +3189,7 @@ impl App {
 
         self.playlist_select_mode = true;
 
-        // seed the selection with the track under the cursor so `d` alone removes it
+        // seed the selection with the track under the cursor so Delete alone removes it
         if self.playlist_selected_items.is_empty() {
             let key = self.selected_playlist_track().map(Self::playlist_track_key);
             if let Some(key) = key {
@@ -3250,7 +3251,7 @@ impl App {
         if !self.playlist_select_mode || self.playlist_selected_items.is_empty() {
             return;
         }
-        if self.client.is_none() || self.state.current_playlist.id.is_empty() {
+        if self.state.current_playlist.id.is_empty() {
             return;
         }
 
