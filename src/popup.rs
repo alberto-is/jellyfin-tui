@@ -2638,13 +2638,14 @@ impl crate::tui::App {
                         self.copy_lastfm_album_url(&track)?;
                     }
                     PopupCommand::Delete => {
-                        let keys: Vec<String> = if self.playlist_select_mode
-                            && !self.playlist_selected_items.is_empty()
-                        {
-                            self.playlist_selected_items.iter().cloned().collect()
-                        } else {
-                            vec![Self::playlist_track_key(&track)]
-                        };
+                        let keys: Vec<String> =
+                            if self.select.is_active_in(crate::select::SelectPane::PlaylistTracks)
+                                && !self.select.is_empty()
+                            {
+                                self.select.keys()
+                            } else {
+                                vec![Self::playlist_track_key(&track)]
+                            };
                         self.popup.current_menu = Some(PopupMenu::PlaylistTracksRemove {
                             keys,
                             playlist_name: self.state.current_playlist.name.clone(),

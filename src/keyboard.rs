@@ -22,6 +22,7 @@ use crate::database::extension::{
 use crate::discography::{self, DiscographyView};
 pub(crate) use crate::helpers::{search_ranked_indices, search_ranked_refs};
 use crate::mpv::SeekFlag;
+use crate::select::SelectPane;
 
 pub(crate) use crate::helpers::Selectable;
 use crate::helpers::{normalize_for_search, Searchable};
@@ -584,7 +585,7 @@ impl App {
             return;
         }
 
-        if self.playlist_select_mode {
+        if self.select.is_active_in(SelectPane::PlaylistTracks) {
             // leaving the playlist tracks pane automatically exits select mode
             if self.state.active_tab != ActiveTab::Playlists
                 || self.state.active_section != ActiveSection::Tracks
@@ -3114,7 +3115,7 @@ impl App {
 
     fn begin_playlist_edit(&mut self) {
         if self.playlist_editing
-            || self.playlist_select_mode
+            || self.select.is_active()
             || !self.state.playlist_tracks_search_term.is_empty()
         {
             return;
@@ -3171,7 +3172,7 @@ impl App {
 
     /// Enter or exit playlist select mode, used to remove multiple tracks from a playlist at once.
     pub fn toggle_playlist_select_mode(&mut self) {
-        if self.playlist_select_mode {
+        if self.select.is_active() {
             self.exit_playlist_select_mode();
             return;
         }
@@ -3187,26 +3188,17 @@ impl App {
             return;
         }
 
-        self.playlist_select_mode = true;
-
         // seed the selection with the track under the cursor so Delete alone removes it
-        if self.playlist_selected_items.is_empty() {
-            let key = self.selected_playlist_track().map(Self::playlist_track_key);
-            if let Some(key) = key {
-                if !key.is_empty() {
-                    self.playlist_selected_items.insert(key);
-                }
-            }
-        }
+        let cursor_key = self.selected_playlist_track().map(Self::playlist_track_key);
+        self.select.enter(SelectPane::PlaylistTracks, cursor_key);
         self.dirty = true;
     }
 
     pub fn exit_playlist_select_mode(&mut self) {
-        if !self.playlist_select_mode {
+        if !self.select.is_active() {
             return;
         }
-        self.playlist_select_mode = false;
-        self.playlist_selected_items.clear();
+        self.select.exit();
         self.dirty = true;
     }
 
@@ -3220,7 +3212,7 @@ impl App {
     }
 
     /// Stable key for marking a playlist track in select mode. Prefers the playlist entry id, but
-    /// falls back to the media id, matching how single tracks are removed today.
+    /// falls back to the media id, matching how single tracks are removed.
     pub(crate) fn playlist_track_key(track: &DiscographySong) -> String {
         if track.playlist_item_id.is_empty() {
             track.id.clone()
@@ -3231,24 +3223,19 @@ impl App {
 
     /// Toggle the track under the cursor in/out of the selection (space / enter in select mode).
     pub fn toggle_playlist_selection(&mut self) {
-        if !self.playlist_select_mode {
+        if !self.select.is_active() {
             return;
         }
         let Some(key) = self.selected_playlist_track().map(Self::playlist_track_key) else {
             return;
         };
-        if key.is_empty() {
-            return;
-        }
-        if !self.playlist_selected_items.remove(&key) {
-            self.playlist_selected_items.insert(key);
-        }
+        self.select.toggle(key);
         self.dirty = true;
     }
 
     /// Ask for confirmation before removing every selected track from the current playlist.
     pub fn request_playlist_selection_removal(&mut self) {
-        if !self.playlist_select_mode || self.playlist_selected_items.is_empty() {
+        if !self.select.is_active_in(SelectPane::PlaylistTracks) || self.select.is_empty() {
             return;
         }
         if self.state.current_playlist.id.is_empty() {
@@ -3259,7 +3246,7 @@ impl App {
         self.state.last_section = self.state.active_section;
         self.state.active_section = ActiveSection::Popup;
         self.popup.current_menu = Some(crate::popup::PopupMenu::PlaylistTracksRemove {
-            keys: self.playlist_selected_items.iter().cloned().collect(),
+            keys: self.select.keys(),
             playlist_name: self.state.current_playlist.name.clone(),
             playlist_id: self.state.current_playlist.id.clone(),
         });
