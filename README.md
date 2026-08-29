@@ -141,9 +141,11 @@ auto_color_fade_ms: 400
 # Always show the lyrics pane, even if no lyrics are available
 lyrics: 'always' # options: 'always', 'never', 'auto'
 
-# Show the Album column in the artist's discography. The album headers already name
-# the album, so turning this off gives the extra space to the track titles.
-album_column: true
+# Show the Album column in the artist's discography. 'auto' hides it in panes narrower than
+# album_column_threshold, where the track titles need the space more, but still shows it while
+# searching.
+album_column: auto # options: 'auto', true, false
+album_column_threshold: 140 # columns; only used when album_column is 'auto'
 
 # Layout mode — 'auto' switches to vertical below vertical_threshold columns
 layout: auto # options: 'auto', 'vertical', 'horizontal'

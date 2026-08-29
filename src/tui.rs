@@ -12,7 +12,7 @@ use crate::client::{
     Playlist, ProgressReport, ProgressReportInternal, QueueItem, RemoteCommand,
     TempDiscographyAlbum, Transcoding,
 };
-use crate::config::LyricsVisibility;
+use crate::config::{AlbumColumn, LyricsVisibility};
 use crate::database;
 use crate::database::database::{
     Command, DownloadCommand, DownloadItem, JellyfinCommand, Status, UpdateCommand, UpdateStage,
@@ -246,7 +246,8 @@ pub struct App {
 
     pub lyrics: Option<(String, Vec<Lyric>, bool)>, // ID, lyrics, time_synced
     pub lyrics_visibility: LyricsVisibility,
-    pub show_album_column: bool,
+    pub album_column: AlbumColumn,
+    pub album_column_threshold: u16,
     pub layout_mode: crate::config::LayoutMode,
     pub vertical_threshold: u16,
     pub previous_song_parent_id: String,
@@ -573,7 +574,11 @@ impl App {
                 .and_then(|v| v.as_str())
                 .map(LyricsVisibility::from_config)
                 .unwrap_or(LyricsVisibility::Always),
-            show_album_column: config.get("album_column").and_then(|v| v.as_bool()).unwrap_or(true),
+            album_column: AlbumColumn::from_config(config.get("album_column")),
+            album_column_threshold: config
+                .get("album_column_threshold")
+                .and_then(|v| v.as_u64())
+                .unwrap_or(140) as u16,
             layout_mode: config
                 .get("layout")
                 .and_then(|v| v.as_str())
@@ -1464,8 +1469,11 @@ impl App {
                     .and_then(|v| v.as_str())
                     .map(LyricsVisibility::from_config)
                     .unwrap_or(LyricsVisibility::Always);
-                self.show_album_column =
-                    new_config.get("album_column").and_then(|v| v.as_bool()).unwrap_or(true);
+                self.album_column = AlbumColumn::from_config(new_config.get("album_column"));
+                self.album_column_threshold = new_config
+                    .get("album_column_threshold")
+                    .and_then(|v| v.as_u64())
+                    .unwrap_or(140) as u16;
                 self.layout_mode = new_config
                     .get("layout")
                     .and_then(|v| v.as_str())

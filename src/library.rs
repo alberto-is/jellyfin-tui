@@ -913,7 +913,11 @@ impl App {
             .filter(|t| !t.is_album_header())
             .any(|t| (if t.parent_index_number > 0 { t.parent_index_number } else { 1 }) != 1);
         let show_lyrics_column = !matches!(self.lyrics_visibility, LyricsVisibility::Never);
-        let show_album_column = self.show_album_column;
+        let show_album_column = self.album_column.is_visible(
+            !self.state.tracks_search_term.is_empty(),
+            center[0].width,
+            self.album_column_threshold,
+        );
 
         let terminal_height = frame.area().height as usize;
         let selection = self.state.selected_track.selected().unwrap_or(0);
