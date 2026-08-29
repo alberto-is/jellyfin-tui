@@ -3101,8 +3101,7 @@ impl crate::tui::App {
                 match action {
                     PopupCommand::AddToPlaylist { playlist_id } => {
                         let track_ids = vec![track_id.clone()];
-                        self.add_selection_to_playlist(1, &track_ids, playlists, playlist_id)
-                            .await;
+                        self.add_selection_to_playlist(1, &track_ids, playlists, playlist_id).await;
                     }
                     _ => {
                         self.close_popup();
@@ -3156,6 +3155,16 @@ impl crate::tui::App {
                 .iter_mut()
                 .find(|p| p.id == playlist.id)
                 .map(|p| p.child_count += added as u64);
+            if self.state.current_playlist.id == *playlist_id {
+                self.state.current_playlist.child_count += added as u64;
+            }
+
+            let _ = self
+                .db
+                .cmd_tx
+                .send(Command::Update(UpdateCommand::Playlist { playlist_id: playlist_id.clone() }))
+                .await;
+
             self.set_generic_message(
                 "Tracks added",
                 &format!(
