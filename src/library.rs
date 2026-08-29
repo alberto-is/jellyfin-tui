@@ -1158,41 +1158,7 @@ impl App {
             })
             .collect::<Vec<Row>>();
 
-        let track_instructions = if self.select.is_active_in(SelectPane::LibraryTracks) {
-            Line::from(vec![
-                Span::styled(
-                    format!(" {} selected ", self.select.len()),
-                    Style::default().fg(self.theme.primary_color).add_modifier(Modifier::BOLD),
-                ),
-                " Toggle ".fg(self.theme.resolve(&self.theme.section_title)),
-                Span::styled(
-                    "<space>".to_string(),
-                    Style::default().fg(self.theme.primary_color).add_modifier(Modifier::BOLD),
-                ),
-                " Add to playlist ".fg(self.theme.resolve(&self.theme.section_title)),
-                Span::styled(
-                    "<p>".to_string(),
-                    Style::default().fg(self.theme.primary_color).add_modifier(Modifier::BOLD),
-                ),
-                " Exit ".fg(self.theme.resolve(&self.theme.section_title)),
-                Span::styled(
-                    "<esc>".to_string(),
-                    Style::default().fg(self.theme.primary_color).add_modifier(Modifier::BOLD),
-                ),
-            ])
-        } else {
-            let mut line = vec![
-                " Help ".fg(self.theme.resolve(&self.theme.section_title)),
-                "<?>".fg(self.theme.primary_color).bold(),
-            ];
-            if self.client.is_some() {
-                line.push(" Select ".fg(self.theme.resolve(&self.theme.section_title)));
-                line.push("<V>".fg(self.theme.primary_color).bold());
-            }
-            line.push(" Quit ".fg(self.theme.resolve(&self.theme.section_title)));
-            line.push("<^C> ".fg(self.theme.primary_color).bold());
-            Line::from(line)
-        };
+        let track_instructions = self.track_select_instructions(SelectPane::LibraryTracks);
 
         let mut widths: Vec<Constraint> = vec![Constraint::Length(
             4 + if self.select.is_active_in(SelectPane::LibraryTracks) { 1 } else { 0 },
@@ -1491,41 +1457,7 @@ impl App {
             })
             .collect::<Vec<Row>>();
 
-        let track_instructions = if self.select.is_active_in(SelectPane::AlbumTracks) {
-            Line::from(vec![
-                Span::styled(
-                    format!(" {} selected ", self.select.len()),
-                    Style::default().fg(self.theme.primary_color).add_modifier(Modifier::BOLD),
-                ),
-                " Toggle ".fg(self.theme.resolve(&self.theme.section_title)),
-                Span::styled(
-                    "<space>".to_string(),
-                    Style::default().fg(self.theme.primary_color).add_modifier(Modifier::BOLD),
-                ),
-                " Add to playlist ".fg(self.theme.resolve(&self.theme.section_title)),
-                Span::styled(
-                    "<p>".to_string(),
-                    Style::default().fg(self.theme.primary_color).add_modifier(Modifier::BOLD),
-                ),
-                " Exit ".fg(self.theme.resolve(&self.theme.section_title)),
-                Span::styled(
-                    "<esc>".to_string(),
-                    Style::default().fg(self.theme.primary_color).add_modifier(Modifier::BOLD),
-                ),
-            ])
-        } else {
-            let mut line = vec![
-                " Help ".fg(self.theme.resolve(&self.theme.section_title)),
-                "<?>".fg(self.theme.primary_color).bold(),
-            ];
-            if self.client.is_some() {
-                line.push(" Select ".fg(self.theme.resolve(&self.theme.section_title)));
-                line.push("<V>".fg(self.theme.primary_color).bold());
-            }
-            line.push(" Quit ".fg(self.theme.resolve(&self.theme.section_title)));
-            line.push("<^C> ".fg(self.theme.primary_color).bold());
-            Line::from(line)
-        };
+        let track_instructions = self.track_select_instructions(SelectPane::AlbumTracks);
 
         let mut widths: Vec<Constraint> = vec![
             Constraint::Length(
@@ -1676,6 +1608,44 @@ impl App {
 
         frame.render_widget(Clear, center[0]);
         frame.render_stateful_widget(table, center[0], &mut self.state.selected_album_track);
+    }
+
+    fn track_select_instructions<'a>(&self, pane: SelectPane) -> Line<'a> {
+        if self.select.is_active_in(pane) {
+            Line::from(vec![
+                Span::styled(
+                    format!(" {} selected ", self.select.len()),
+                    Style::default().fg(self.theme.primary_color).add_modifier(Modifier::BOLD),
+                ),
+                " Toggle ".fg(self.theme.resolve(&self.theme.section_title)),
+                Span::styled(
+                    "<space>".to_string(),
+                    Style::default().fg(self.theme.primary_color).add_modifier(Modifier::BOLD),
+                ),
+                " Add to playlist ".fg(self.theme.resolve(&self.theme.section_title)),
+                Span::styled(
+                    "<p>".to_string(),
+                    Style::default().fg(self.theme.primary_color).add_modifier(Modifier::BOLD),
+                ),
+                " Exit ".fg(self.theme.resolve(&self.theme.section_title)),
+                Span::styled(
+                    "<esc>".to_string(),
+                    Style::default().fg(self.theme.primary_color).add_modifier(Modifier::BOLD),
+                ),
+            ])
+        } else {
+            let mut line = vec![
+                " Help ".fg(self.theme.resolve(&self.theme.section_title)),
+                "<?>".fg(self.theme.primary_color).bold(),
+            ];
+            if self.client.is_some() {
+                line.push(" Select ".fg(self.theme.resolve(&self.theme.section_title)));
+                line.push("<V>".fg(self.theme.primary_color).bold());
+            }
+            line.push(" Quit ".fg(self.theme.resolve(&self.theme.section_title)));
+            line.push("<^C> ".fg(self.theme.primary_color).bold());
+            Line::from(line)
+        }
     }
 
     pub fn render_player(
