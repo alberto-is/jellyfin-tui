@@ -7,7 +7,7 @@ Keyboard related functions
 use crate::{
     client::{Album, Artist, DiscographySong},
     database::{
-        database::{Command, DownloadCommand, RemoveCommand},
+        database::{Command, DownloadCommand, RemoveCommand, UpdateCommand},
         extension::DownloadStatus,
     },
     sort,
@@ -3363,6 +3363,22 @@ impl App {
                 !selection.contains(&key)
             });
             self.playlist_track_select_by_index(0);
+
+            self.playlists
+                .iter_mut()
+                .find(|p| p.id == playlist_id)
+                .map(|p| p.child_count = p.child_count.saturating_sub(removed_ok as u64));
+            if self.state.current_playlist.id == playlist_id {
+                self.state.current_playlist.child_count =
+                    self.state.current_playlist.child_count.saturating_sub(removed_ok as u64);
+            }
+
+            let _ = self
+                .db
+                .cmd_tx
+                .send(Command::Update(UpdateCommand::Playlist { playlist_id: playlist_id.clone() }))
+                .await;
+
             self.set_generic_message(
                 "Tracks removed",
                 &format!("Removed {} track(s) from {}.", removed_ok, playlist_name),
