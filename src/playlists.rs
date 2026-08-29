@@ -271,13 +271,16 @@ impl App {
                 }
 
                 let mut cells = vec![
-                    // No.
-                    Cell::from(if is_selected {
-                        format!("✓{}.", i + 1)
+                    // No. - the ✓ slot is reserved for every row in select mode, so toggling a
+                    // track doesn't shift the numbers under the cursor
+                    Cell::from(if self.playlist_select_mode {
+                        format!("{}{}.", if is_selected { "✓" } else { " " }, i + 1)
                     } else {
                         format!("{}.", i + 1)
                     })
-                    .style(if track.id == self.active_song_id {
+                    .style(if is_selected {
+                        Style::default().fg(self.theme.resolve(&self.theme.foreground))
+                    } else if track.id == self.active_song_id {
                         Style::default().fg(color)
                     } else {
                         Style::default().fg(Color::DarkGray)
@@ -303,14 +306,20 @@ impl App {
                         DownloadStatus::NotDownloaded => Line::from(""),
                     }));
                 }
-                // ♥
+                // ♥ - dims along with the rest of the row it sits on
                 cells.push(
                     Cell::from(if track.user_data.is_favorite {
                         &self.symbols.favorite
                     } else {
                         ""
                     })
-                    .style(Style::default().fg(self.theme.primary_color)),
+                    .style(Style::default().fg(
+                        if self.playlist_select_mode && !is_selected {
+                            self.theme.resolve(&self.theme.foreground_dim)
+                        } else {
+                            self.theme.primary_color
+                        },
+                    )),
                 );
                 // ♪
                 if show_lyrics_column {
@@ -326,17 +335,18 @@ impl App {
                         .alignment(Alignment::Right),
                 ));
 
-                Row::new(cells).style(if is_selected {
-                    Style::default()
-                        .fg(self.theme.primary_color)
-                        .add_modifier(Modifier::BOLD | Modifier::UNDERLINED)
-                } else if track.id == self.active_song_id {
+                let mut row_style = if track.id == self.active_song_id {
                     Style::default().fg(self.theme.primary_color).italic()
                 } else if track.disliked {
                     Style::default().fg(self.theme.resolve(&self.theme.foreground_dim))
                 } else {
                     Style::default().fg(self.theme.resolve(&self.theme.foreground))
-                })
+                };
+                if self.playlist_select_mode && !is_selected {
+                    row_style = row_style.fg(self.theme.resolve(&self.theme.foreground_dim));
+                }
+
+                Row::new(cells).style(row_style)
             })
             .collect::<Vec<Row>>();
 
@@ -351,7 +361,7 @@ impl App {
                     Style::default().fg(self.theme.resolve(&self.theme.section_title)),
                 ),
                 Span::styled(
-                    "<space>".to_string(),
+                    "<Space>".to_string(),
                     Style::default().fg(self.theme.primary_color).add_modifier(Modifier::BOLD),
                 ),
                 Span::styled(
@@ -387,7 +397,7 @@ impl App {
             // removing tracks from playlists is not possible while offline
             if self.client.is_some() {
                 line.push(" Select ".fg(self.theme.resolve(&self.theme.section_title)));
-                line.push("<v>".fg(self.theme.primary_color).bold());
+                line.push("<V>".fg(self.theme.primary_color).bold());
             }
             line.push(" Quit ".fg(self.theme.resolve(&self.theme.section_title)));
             line.push("<^C> ".fg(self.theme.primary_color).bold());
@@ -456,7 +466,12 @@ impl App {
             };
             let duration = format!("{}{:02}:{:02}", hours_optional_text, minutes, seconds);
 
-            let mut header_cells = vec!["No.", "Title", "Artist", "Album"];
+            let mut header_cells = vec![
+                if self.playlist_select_mode { " No." } else { "No." },
+                "Title",
+                "Artist",
+                "Album",
+            ];
             if self.client.is_some() {
                 header_cells.push(&self.symbols.downloaded);
             }

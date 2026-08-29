@@ -1,4 +1,4 @@
-use crate::helpers::State;
+use crate::helpers::{Searchable, State};
 use crate::keyboard::ActiveSection;
 use crate::popup::{open_queue_track_popup, PopupCommand, PopupMenu, PopupState};
 use crate::tui::Song;
@@ -60,4 +60,16 @@ fn queue_track_popup_offers_add_to_playlist() {
     ));
     // add-to-playlist mutates server state, so it must disappear when offline
     assert!(options[0].online);
+}
+
+#[test]
+fn playlist_removal_popup_counts_every_marked_track() {
+    let menu = PopupMenu::PlaylistTracksRemove {
+        keys: vec!["a".to_string(), "b".to_string(), "c".to_string()],
+        playlist_name: "Mix".to_string(),
+        playlist_id: "playlist-id".to_string(),
+    };
+
+    let options = menu.options("favorite");
+    assert!(options[0].name().contains('3'), "{}", options[0].name());
 }

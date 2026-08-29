@@ -181,7 +181,6 @@ pub enum PopupMenu {
     // Confirmation for removing one or many tracks from a playlist; also used when
     // removing a selection marked with select mode (`v`)
     PlaylistTracksRemove {
-        count: usize,
         keys: Vec<String>,
         playlist_name: String,
         playlist_id: String,
@@ -339,8 +338,8 @@ impl PopupMenu {
             // ---------- Playlist tracks ---------- //
             PopupMenu::PlaylistTracksRoot { track, .. } => track.name.to_string(),
             PopupMenu::PlaylistTrackAddToPlaylist { track_name, .. } => track_name.to_string(),
-            PopupMenu::PlaylistTracksRemove { count, .. } => {
-                format!("Remove {} selected track(s)?", count)
+            PopupMenu::PlaylistTracksRemove { keys, .. } => {
+                format!("Remove {} selected track(s)?", keys.len())
             }
             // ---------- Artists ---------- //
             PopupMenu::ArtistRoot { artist, .. } => artist.name.to_string(),
@@ -1049,9 +1048,9 @@ impl PopupMenu {
                 }
                 actions
             }
-            PopupMenu::PlaylistTracksRemove { count, .. } => vec![
+            PopupMenu::PlaylistTracksRemove { keys, .. } => vec![
                 PopupAction::new(
-                    format!("Remove {} selected track(s) from playlist?", count),
+                    format!("Remove {} selected track(s) from playlist?", keys.len()),
                     PopupCommand::None,
                     Style::default().fg(style::Color::Red),
                     true,
@@ -2639,9 +2638,15 @@ impl crate::tui::App {
                         self.copy_lastfm_album_url(&track)?;
                     }
                     PopupCommand::Delete => {
+                        let keys: Vec<String> = if self.playlist_select_mode
+                            && !self.playlist_selected_items.is_empty()
+                        {
+                            self.playlist_selected_items.iter().cloned().collect()
+                        } else {
+                            vec![Self::playlist_track_key(&track)]
+                        };
                         self.popup.current_menu = Some(PopupMenu::PlaylistTracksRemove {
-                            count: 1,
-                            keys: vec![Self::playlist_track_key(&track)],
+                            keys,
                             playlist_name: self.state.current_playlist.name.clone(),
                             playlist_id: self.state.current_playlist.id.clone(),
                         });

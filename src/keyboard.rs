@@ -3259,7 +3259,6 @@ impl App {
         self.state.last_section = self.state.active_section;
         self.state.active_section = ActiveSection::Popup;
         self.popup.current_menu = Some(crate::popup::PopupMenu::PlaylistTracksRemove {
-            count: self.playlist_selected_items.len(),
             keys: self.playlist_selected_items.iter().cloned().collect(),
             playlist_name: self.state.current_playlist.name.clone(),
             playlist_id: self.state.current_playlist.id.clone(),
