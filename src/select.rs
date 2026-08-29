@@ -12,6 +12,11 @@ use std::collections::HashSet;
 /// Identifies the list pane a select-mode session is bound to.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SelectPane {
+    /// Artist's discography in the Library tab
+    LibraryTracks,
+    /// Album's tracks in the Albums tab
+    AlbumTracks,
+    /// A playlist's tracks in the Playlists tab
     PlaylistTracks,
 }
 
@@ -33,6 +38,11 @@ impl SelectMode {
 
     pub fn is_active_in(&self, pane: SelectPane) -> bool {
         self.active_pane == Some(pane)
+    }
+
+    /// The pane the session is bound to; `None` while inactive.
+    pub fn pane(&self) -> Option<SelectPane> {
+        self.active_pane
     }
 
     /// Enter select mode in `pane`, seeding the selection with the item under the cursor.

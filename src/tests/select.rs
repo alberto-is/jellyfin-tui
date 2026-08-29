@@ -34,3 +34,12 @@ fn toggle_ignores_empty_keys() {
     select.toggle(String::new());
     assert!(select.is_empty());
 }
+
+#[test]
+fn entering_another_pane_steals_the_session() {
+    let mut select = SelectMode::default();
+    select.enter(SelectPane::PlaylistTracks, None);
+    select.enter(SelectPane::LibraryTracks, Some("x".to_string()));
+    assert_eq!(select.pane(), Some(SelectPane::LibraryTracks));
+    assert!(!select.is_active_in(SelectPane::PlaylistTracks));
+}
