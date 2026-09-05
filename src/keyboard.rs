@@ -3370,8 +3370,10 @@ impl App {
         self.popup.global = false;
         self.state.last_section = self.state.active_section;
         self.state.active_section = ActiveSection::Popup;
+        let order: Vec<String> =
+            self.playlist_tracks.iter().map(Self::playlist_track_key).collect();
         self.popup.current_menu = Some(crate::popup::PopupMenu::PlaylistTracksRemove {
-            keys: self.select.keys(),
+            keys: self.select.ordered_keys(&order),
             playlist_name: self.state.current_playlist.name.clone(),
             playlist_id: self.state.current_playlist.id.clone(),
         });

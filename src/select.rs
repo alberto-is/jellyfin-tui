@@ -7,7 +7,7 @@ Generic select mode
       seeded with the item under the cursor, and rendering markers via `SelectMode::is_selected`
 -------------------------- */
 
-use std::collections::HashSet;
+use indexmap::IndexSet;
 
 /// Identifies the list pane a select-mode session is bound to.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -28,7 +28,7 @@ pub enum SelectPane {
 pub struct SelectMode {
     /// Pane the session is bound to; `None` while inactive.
     active_pane: Option<SelectPane>,
-    selected: HashSet<String>,
+    selected: IndexSet<String>,
 }
 
 impl SelectMode {
@@ -65,7 +65,7 @@ impl SelectMode {
         if self.active_pane.is_none() || key.is_empty() {
             return;
         }
-        if !self.selected.remove(&key) {
+        if !self.selected.shift_remove(&key) {
             self.selected.insert(key);
         }
     }
@@ -82,8 +82,22 @@ impl SelectMode {
         self.selected.is_empty()
     }
 
-    /// Every marked key, in no particular order.
+    /// Every marked key, in insertion order (deterministic, unlike `HashSet`).
     pub fn keys(&self) -> Vec<String> {
         self.selected.iter().cloned().collect()
+    }
+
+    /// Every marked key sorted to match `canonical_order` (e.g. album order).
+    /// Keys missing from the order keep their insertion order at the end.
+    pub fn ordered_keys(&self, canonical_order: &[String]) -> Vec<String> {
+        use std::collections::HashMap;
+        let position: HashMap<&str, usize> = canonical_order
+            .iter()
+            .enumerate()
+            .map(|(i, k)| (k.as_str(), i))
+            .collect();
+        let mut keys = self.keys();
+        keys.sort_by_key(|k| position.get(k.as_str()).copied().unwrap_or(usize::MAX));
+        keys
     }
 }

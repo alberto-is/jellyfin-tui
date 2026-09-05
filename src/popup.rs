@@ -2562,14 +2562,17 @@ impl crate::tui::App {
                         self.copy_lastfm_album_url(&track)?;
                     }
                     PopupCommand::Delete => {
-                        let keys: Vec<String> =
-                            if self.select.is_active_in(crate::select::SelectPane::PlaylistTracks)
-                                && !self.select.is_empty()
-                            {
-                                self.select.keys()
-                            } else {
-                                vec![Self::playlist_track_key(&track)]
-                            };
+                        let keys: Vec<String> = if self
+                            .select
+                            .is_active_in(crate::select::SelectPane::PlaylistTracks)
+                            && !self.select.is_empty()
+                        {
+                            let order: Vec<String> =
+                                self.playlist_tracks.iter().map(Self::playlist_track_key).collect();
+                            self.select.ordered_keys(&order)
+                        } else {
+                            vec![Self::playlist_track_key(&track)]
+                        };
                         self.popup.current_menu = Some(PopupMenu::PlaylistTracksRemove {
                             keys,
                             playlist_name: self.state.current_playlist.name.clone(),
@@ -3075,16 +3078,33 @@ impl crate::tui::App {
     }
 
     /// Open the playlist picker for the current select-mode selection (Library / Albums panes).
+    /// Track ids are ordered to match the source list so the playlist keeps album order.
     pub fn request_selection_add_to_playlist(&mut self) {
         if self.select.is_empty() {
             return;
         }
+        let track_ids = match self.select.pane() {
+            Some(crate::select::SelectPane::LibraryTracks) => {
+                let order: Vec<String> = self
+                    .tracks
+                    .iter()
+                    .filter(|t| !t.is_album_header())
+                    .map(|t| t.id.clone())
+                    .collect();
+                self.select.ordered_keys(&order)
+            }
+            Some(crate::select::SelectPane::AlbumTracks) => {
+                let order: Vec<String> = self.album_tracks.iter().map(|t| t.id.clone()).collect();
+                self.select.ordered_keys(&order)
+            }
+            _ => self.select.keys(),
+        };
         self.popup.global = false;
         self.state.last_section = self.state.active_section;
         self.state.active_section = ActiveSection::Popup;
         self.popup.current_menu = Some(PopupMenu::TracksAddToPlaylist {
-            count: self.select.len(),
-            track_ids: self.select.keys(),
+            count: track_ids.len(),
+            track_ids,
             playlists: self.playlists.clone(),
         });
         self.popup.selected.select_first();

@@ -1,5 +1,5 @@
 //! Tests for the non-obvious decisions of the generic select-mode state machine (src/select.rs).
-//! The rest is a thin HashSet wrapper not worth pinning down.
+//! The rest is a thin IndexSet wrapper not worth pinning down.
 
 use crate::select::{SelectMode, SelectPane};
 
