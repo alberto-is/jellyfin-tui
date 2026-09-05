@@ -590,39 +590,86 @@ impl App {
             // leaving the owning pane automatically exits select mode
             if self.state.active_tab != tab || self.state.active_section != section {
                 self.exit_select_mode();
+                return;
             } else {
                 match action {
-                    Action::Cancel | Action::ToggleSelectMode => self.exit_select_mode(),
-                    Action::PlayPause | Action::Enter => self.toggle_select_item(),
+                    Action::Cancel | Action::ToggleSelectMode => {
+                        self.exit_select_mode();
+                        return;
+                    }
+                    Action::PlayPause | Action::Enter => {
+                        self.toggle_select_item();
+                        return;
+                    }
                     Action::Delete => {
                         if pane == SelectPane::PlaylistTracks {
                             self.request_playlist_selection_removal();
                         }
+                        return;
                     }
+                    Action::MoveItemUp | Action::MoveItemDown => return,
                     Action::Popup => {
                         if pane == SelectPane::PlaylistTracks {
                             self.request_popup(false).await;
                         } else {
                             self.request_selection_add_to_playlist();
                         }
+                        return;
                     }
                     // navigation keeps working while selecting
-                    Action::Up => self.select_previous(),
-                    Action::Down => self.select_next(),
-                    Action::Jump(lines) => self.jump(*lines),
-                    Action::PageUp => self.page_up(),
-                    Action::PageDown => self.page_down(),
-                    Action::JumpFirst => self.go_first(),
-                    Action::JumpLast => self.go_last(),
-                    Action::JumpForward => self.jump_forward(),
-                    Action::JumpBackward => self.jump_backward(),
-                    Action::Quit => self.exit().await,
-                    Action::Help => self.show_help(),
-                    Action::GlobalPopup => self.request_popup(true).await,
-                    _ => return,
+                    Action::Up => {
+                        self.select_previous();
+                        return;
+                    }
+                    Action::Down => {
+                        self.select_next();
+                        return;
+                    }
+                    Action::Jump(lines) => {
+                        self.jump(*lines);
+                        return;
+                    }
+                    Action::PageUp => {
+                        self.page_up();
+                        return;
+                    }
+                    Action::PageDown => {
+                        self.page_down();
+                        return;
+                    }
+                    Action::JumpFirst => {
+                        self.go_first();
+                        return;
+                    }
+                    Action::JumpLast => {
+                        self.go_last();
+                        return;
+                    }
+                    Action::JumpForward => {
+                        self.jump_forward();
+                        return;
+                    }
+                    Action::JumpBackward => {
+                        self.jump_backward();
+                        return;
+                    }
+                    Action::Quit => {
+                        self.exit().await;
+                        return;
+                    }
+                    Action::Help => {
+                        self.show_help();
+                        return;
+                    }
+                    Action::GlobalPopup => {
+                        self.request_popup(true).await;
+                        return;
+                    }
+                    // everything else (e.g. CollapseAlbum) falls
+                    // through to the normal keymap below
+                    _ => {}
                 }
             }
-            return;
         }
 
         if self.zen_mode {
