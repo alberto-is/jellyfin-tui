@@ -366,28 +366,29 @@ pub async fn t_database<'a>(
                     Command::Jellyfin(jellyfin_cmd) => {
                         match jellyfin_cmd {
                             JellyfinCommand::Stopped { id, position_ticks } => {
-                                let _ = client.stopped(id.clone(), position_ticks).await.log_err("send stopped report");
-                                if let Some(song_id) = id {
-                                    let client = client.clone();
-                                    let pool = Arc::clone(&pool);
-                                    let tx = tx.clone();
-                                    tokio::spawn(async move {
-                                        tokio::time::sleep(Duration::from_millis(500)).await;
-                                        if let Ok(tracks) = client.tracks_by_ids(&[song_id.clone()]).await {
-                                            if let Some(track) = tracks.into_iter().next() {
-                                                if let Ok(json_str) = serde_json::to_string(&track) {
-                                                    let _ = sqlx::query(
-                                                        "UPDATE tracks SET track = ?, last_played = CURRENT_TIMESTAMP WHERE id = ?"
-                                                    )
-                                                    .bind(&json_str)
-                                                    .bind(&song_id)
-                                                    .execute(&*pool)
-                                                    .await;
-                                                    let _ = tx.send(Status::TrackUserDataUpdated { song_id, user_data: track.user_data }).await;
+                                match client.stopped(id.clone(), position_ticks).await.log_err("send stopped report") {
+                                    Ok(()) => if let Some(song_id) = id {
+                                        let client = client.clone();
+                                        let pool = Arc::clone(&pool);
+                                        let tx = tx.clone();
+                                        tokio::spawn(async move {
+                                            if let Ok(tracks) = client.tracks_by_ids(&[song_id.clone()]).await {
+                                                if let Some(track) = tracks.into_iter().next() {
+                                                    if let Ok(user_data_json) = serde_json::to_string(&track.user_data) {
+                                                        let _ = sqlx::query(
+                                                            "UPDATE tracks SET track = json_set(track, '$.UserData', json(?)), last_played = CURRENT_TIMESTAMP WHERE id = ?"
+                                                        )
+                                                        .bind(&user_data_json)
+                                                        .bind(&song_id)
+                                                        .execute(&*pool)
+                                                        .await;
+                                                        let _ = tx.send(Status::TrackUserDataUpdated { song_id, user_data: track.user_data }).await;
+                                                    }
                                                 }
                                             }
-                                        }
-                                    });
+                                        });
+                                    },
+                                    Err(_) => {} // nothing we can do if the stopped report failed
                                 }
                             }
                             JellyfinCommand::Playing { progress_report } => {
