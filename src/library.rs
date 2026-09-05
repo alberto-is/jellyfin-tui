@@ -978,13 +978,19 @@ impl App {
                             _ => "",
                         };
 
-                    // a folded album hides the now-playing highlight, so surface it on the header
+                    // a folded album hides the now-playing highlight, so surface it on the header.
+                    // Albums are never selectable themselves, so the header doesn't change;
+                    // we add a ✓ when any of its tracks is checked (collapsed or not).
                     let plays_hidden_current = self.collapsed_albums.contains(&album_id)
                         && self
                             .state
                             .queue
                             .get(self.state.current_playback_state.current_index)
                             .is_some_and(|s| s.album_id == album_id);
+                    let has_selected = self.select.is_active_in(SelectPane::LibraryTracks)
+                        && crate::discography::album_tracks(&self.tracks, &album_id)
+                            .iter()
+                            .any(|t| self.select.is_selected(&t.id));
                     let header_fg = if plays_hidden_current {
                         self.theme.primary_color
                     } else {
@@ -999,9 +1005,13 @@ impl App {
                             String::new()
                         })
                         .style(Style::default().fg(header_fg)),
-                        Cell::from(title_str)
-                            .column_span(if show_album_column { 2 } else { 1 })
-                            .fg(header_fg),
+                        Cell::from(if has_selected {
+                            format!("✓ {}", title_str)
+                        } else {
+                            title_str
+                        })
+                        .column_span(if show_album_column { 2 } else { 1 })
+                        .fg(header_fg),
                     ];
                     if show_disc {
                         cells.push(Cell::from(""));
@@ -1070,19 +1080,23 @@ impl App {
                     title.push(Span::styled(&track.name[last_end..], Style::default().fg(color)));
                 }
 
-                let is_selected = self.select.is_active_in(SelectPane::LibraryTracks)
-                    && self.select.is_selected(&track.id);
+                let select_mode = self.select.is_active_in(SelectPane::LibraryTracks);
+                let is_selected = select_mode && self.select.is_selected(&track.id);
 
                 let mut cells: Vec<Cell> = vec![
-                    Cell::from(if is_selected {
-                        format!("✓{}.", track.index_number)
+                    // No. - the ✓ slot is reserved for every row in select mode, so toggling a
+                    // track doesn't shift the numbers under the cursor
+                    Cell::from(if select_mode {
+                        format!("{}{}.", if is_selected { "✓" } else { " " }, track.index_number)
                     } else {
                         format!("{}.", track.index_number)
                     })
-                    .style(if track.id == self.active_song_id {
+                    .style(if is_selected {
+                        Style::default().fg(self.theme.resolve(&self.theme.foreground))
+                    } else if track.id == self.active_song_id {
                         Style::default().fg(color)
                     } else {
-                        Style::default().fg(self.theme.resolve(&self.theme.foreground_dim))
+                        Style::default().fg(Color::DarkGray)
                     }),
                     Cell::from(if all_subsequences.is_empty() {
                         title_str.into()
@@ -1115,14 +1129,20 @@ impl App {
                     }));
                 }
 
-                // ♥ (favorite)
+                // ♥ (favorite) - dims along with the rest of the row it sits on
                 cells.push(
                     Cell::from(if track.user_data.is_favorite {
                         &self.symbols.favorite
                     } else {
                         ""
                     })
-                    .style(Style::default().fg(self.theme.primary_color)),
+                    .style(Style::default().fg(
+                        if select_mode && !is_selected {
+                            self.theme.resolve(&self.theme.foreground_dim)
+                        } else {
+                            self.theme.primary_color
+                        },
+                    )),
                 );
 
                 // ♪
@@ -1142,7 +1162,7 @@ impl App {
                 max_duration_len = std::cmp::max(max_duration_len, duration_str.len());
                 cells.push(Cell::from(Text::from(duration_str).alignment(Alignment::Right)));
 
-                let style = if is_selected {
+                let mut style = if is_selected {
                     Style::default()
                         .fg(self.theme.primary_color)
                         .add_modifier(Modifier::BOLD | Modifier::UNDERLINED)
@@ -1153,6 +1173,9 @@ impl App {
                 } else {
                     Style::default().fg(self.theme.resolve(&self.theme.foreground))
                 };
+                if select_mode && !is_selected {
+                    style = style.fg(self.theme.resolve(&self.theme.foreground_dim));
+                }
 
                 Row::new(cells).style(style)
             })
@@ -1234,8 +1257,16 @@ impl App {
 
         let selected_is_album = tracks.get(selection).map_or(false, |t| t.is_album_header());
 
-        let mut header_cells: Vec<&str> =
-            vec![if selected_is_album { "Yr." } else { "No." }, "Title"];
+        let mut header_cells: Vec<&str> = vec![
+            if selected_is_album {
+                "Yr."
+            } else if self.select.is_active_in(SelectPane::LibraryTracks) {
+                " No."
+            } else {
+                "No."
+            },
+            "Title",
+        ];
         if show_album_column {
             header_cells.push("Album");
         }
@@ -1374,19 +1405,23 @@ impl App {
                     title.push(Span::styled(&track.name[last_end..], Style::default().fg(color)));
                 }
 
-                let is_selected = self.select.is_active_in(SelectPane::AlbumTracks)
-                    && self.select.is_selected(&track.id);
+                let select_mode = self.select.is_active_in(SelectPane::AlbumTracks);
+                let is_selected = select_mode && self.select.is_selected(&track.id);
 
                 let mut cells: Vec<Cell> = vec![
-                    Cell::from(if is_selected {
-                        format!("✓{}.", track.index_number)
+                    // No. - the ✓ slot is reserved for every row in select mode, so toggling a
+                    // track doesn't shift the numbers under the cursor
+                    Cell::from(if select_mode {
+                        format!("{}{}.", if is_selected { "✓" } else { " " }, track.index_number)
                     } else {
                         format!("{}.", track.index_number)
                     })
-                    .style(if track.id == self.active_song_id {
+                    .style(if is_selected {
+                        Style::default().fg(self.theme.resolve(&self.theme.foreground))
+                    } else if track.id == self.active_song_id {
                         Style::default().fg(color)
                     } else {
-                        Style::default().fg(self.theme.resolve(&self.theme.foreground_dim))
+                        Style::default().fg(Color::DarkGray)
                     }),
                     Cell::from(if all_subsequences.is_empty() {
                         track.name.to_string().into()
@@ -1415,14 +1450,20 @@ impl App {
                     }));
                 }
 
-                // ♥
+                // ♥ - dims along with the rest of the row it sits on
                 cells.push(
                     Cell::from(if track.user_data.is_favorite {
                         &self.symbols.favorite
                     } else {
                         ""
                     })
-                    .style(Style::default().fg(self.theme.primary_color)),
+                    .style(Style::default().fg(
+                        if select_mode && !is_selected {
+                            self.theme.resolve(&self.theme.foreground_dim)
+                        } else {
+                            self.theme.primary_color
+                        },
+                    )),
                 );
 
                 // ♪
@@ -1443,7 +1484,7 @@ impl App {
                         .alignment(Alignment::Right),
                 ));
 
-                Row::new(cells).style(if is_selected {
+                let mut row_style = if is_selected {
                     Style::default()
                         .fg(self.theme.primary_color)
                         .add_modifier(Modifier::BOLD | Modifier::UNDERLINED)
@@ -1453,7 +1494,12 @@ impl App {
                     Style::default().fg(self.theme.resolve(&self.theme.foreground_dim))
                 } else {
                     Style::default().fg(self.theme.resolve(&self.theme.foreground))
-                })
+                };
+                if select_mode && !is_selected {
+                    row_style = row_style.fg(self.theme.resolve(&self.theme.foreground_dim));
+                }
+
+                Row::new(cells).style(row_style)
             })
             .collect::<Vec<Row>>();
 
@@ -1529,7 +1575,10 @@ impl App {
         };
         let duration = format!("{}{:02}:{:02}", hours_optional_text, minutes, seconds);
 
-        let mut header_cells: Vec<&str> = vec!["No.", "Title"];
+        let mut header_cells: Vec<&str> = vec![
+            if self.select.is_active_in(SelectPane::AlbumTracks) { " No." } else { "No." },
+            "Title",
+        ];
         if show_disc {
             header_cells.push(&self.symbols.disc);
         }

@@ -91,11 +91,8 @@ impl SelectMode {
     /// Keys missing from the order keep their insertion order at the end.
     pub fn ordered_keys(&self, canonical_order: &[String]) -> Vec<String> {
         use std::collections::HashMap;
-        let position: HashMap<&str, usize> = canonical_order
-            .iter()
-            .enumerate()
-            .map(|(i, k)| (k.as_str(), i))
-            .collect();
+        let position: HashMap<&str, usize> =
+            canonical_order.iter().enumerate().map(|(i, k)| (k.as_str(), i)).collect();
         let mut keys = self.keys();
         keys.sort_by_key(|k| position.get(k.as_str()).copied().unwrap_or(usize::MAX));
         keys
