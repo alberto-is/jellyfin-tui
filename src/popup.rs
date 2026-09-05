@@ -3137,20 +3137,19 @@ impl crate::tui::App {
             return;
         };
 
-        if self.client.is_none() {
+        let Some(client) = self.client.as_ref() else {
+            return;
+        };
+
+        if track_ids.is_empty() {
             return;
         }
 
-        let mut added = 0usize;
-        for id in track_ids {
-            if let Some(client) = self.client.as_ref() {
-                if client.add_to_playlist(id, playlist_id).await.is_ok() {
-                    added += 1;
-                }
-            }
-        }
+        let ids = track_ids.join(",");
+        let ok = client.add_to_playlist(&ids, playlist_id).await.is_ok();
 
-        if added > 0 {
+        if ok {
+            let added = track_ids.len();
             self.playlists
                 .iter_mut()
                 .find(|p| p.id == playlist.id)
